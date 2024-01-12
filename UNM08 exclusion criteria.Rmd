@@ -1,0 +1,723 @@
+---
+title: "UNM08 exclusion criteria"
+output:
+  pdf_document: default
+date: "2023-12-05"
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(afex)
+library(BayesFactor)
+library(apa)
+library(emmeans)
+library("writexl")
+load("C:/Users/munizdie/OneDrive - Lancaster University/Experiments/Recognition Memory/UNM08/UNM08_analysis/UNM08_proc_data.RData")
+# function to force scientific formatting of numbers (used for large BFs)
+changeSciNot <- function(n) {
+  output <- format(n, scientific = TRUE, digits = 2) #Transforms the number into scientific notation even if small
+  output <- sub("e", "x10^", output) #Replace e with 10^
+  output <- sub("\\+0?", "", output) #Remove + symbol and leading zeros on exponent, if > 1
+  output <- sub("-0?", "-", output) #Leaves - symbol but removes leading zeros on exponent, if < 1
+  output <- paste0(output,"^")
+  # output = strsplit(output, "^", fixed = TRUE)
+  # output = paste0(output[[1]][1],"^", output[[1]][2], "^")
+  output
+}
+
+# function to extract and report BFs with error %s
+report_BF_and_error <- function(BF_in, sci_not = TRUE, hyp = "alt"){
+  
+  if (hyp == "alt") {
+    BF_notation = "BF~10~ = "
+  } else if (hyp == "null") {
+    BF_notation = "BF~01~ = "
+  }
+  
+  if (sci_not == TRUE) {
+    BF_value = changeSciNot(extractBF(BF_in)$bf) # change to sci notation
+  } else {
+    BF_value = round(extractBF(BF_in)$bf,2) # otherwise round
+  }
+  
+  paste0(BF_notation, 
+         BF_value, 
+         " &plusmn; ", 
+         round(100*extractBF(BF_in)$error,2), 
+         "%")
+}
+
+```
+
+# Design
+
+In this experiment, the differences in recognition memory of predictive and non-predictive cues was examined under both a certain and an uncertain training. Both groups received a training in which two cues are presented in each trial followed by an outcome. Only one of the cues is predictive of the outcome, whereas the other appears the same amount of times with each of the two possible outcomes. In one of this groups, the contingency between the predictive cues and their respective outcomes is of 1, so in each trial that the predictive cue is presented its corresponding outcome follows. For the other group, this contingency is of 0.8, so the predictive cue is followed by the outcome on 80% of the trials. After the training phase, all subjects were presented two cues on each trial, one that was presented on training and one that wasn't, but that was similar to the other cues presented on the training phase (a pair of balls swapped colours in the fouls). Subjects had to choose which one they had seen before and rate how confident they were of their choice.
+
++--------------+----------------+---------------------------+--------------+
+| Group        | Stage 1        | Stage 2                   | Test2        |
++==============+:==============:+:=========================:+:============:+
+| Certain      | AX - O1        | AX - O1                   | A vs *b*     |
+|              |                |                           |              |
+|              |                |                           | A vs *x*     |
+|              |                |                           |              |
+|              |                |                           | A vs *y*     |
++--------------+----------------+---------------------------+--------------+
+|              | AY - O1        | AY - O1                   | B vs *a*     |
+|              |                |                           |              |
+|              |                |                           | B vs *x*     |
+|              |                |                           |              |
+|              |                |                           | B vs *y*     |
++--------------+----------------+---------------------------+--------------+
+|              | BX - O2        | BX - O2                   | X vs *a*     |
+|              |                |                           |              |
+|              |                |                           | X vs *b*     |
+|              |                |                           |              |
+|              |                |                           | X vs *y*     |
++--------------+----------------+---------------------------+--------------+
+|              | BY - O2        | BY - O2                   | Y vs *a*     |
+|              |                |                           |              |
+|              |                |                           | Y vs *b*     |
+|              |                |                           |              |
+|              |                |                           | Y vs *x*     |
++--------------+----------------+---------------------------+--------------+
+| Uncertain    | AX - O1        | 0.8 AX - O1 / 0.2 AX - O2 | A vs *b*     |
+|              |                |                           |              |
+|              |                |                           | A vs *x*     |
+|              |                |                           |              |
+|              |                |                           | A vs *y*     |
++--------------+----------------+---------------------------+--------------+
+|              | AY - O1        | 0.8 AY - O1 / 0.2 AY - O2 | B vs *a*     |
+|              |                |                           |              |
+|              |                |                           | B vs *x*     |
+|              |                |                           |              |
+|              |                |                           | B vs *y*     |
++--------------+----------------+---------------------------+--------------+
+|              | BX - O2        | 0.8 BX - O1 / 0.2 BX - O2 | X vs *a*     |
+|              |                |                           |              |
+|              |                |                           | X vs *b*     |
+|              |                |                           |              |
+|              |                |                           | X vs *y*     |
++--------------+----------------+---------------------------+--------------+
+|              | BY - O2        | 0.8 BY - O1 / 0.2 BY - O2 | Y vs *a*     |
+|              |                |                           |              |
+|              |                |                           | Y vs *b*     |
+|              |                |                           |              |
+|              |                |                           | Y vs *x*     |
++--------------+----------------+---------------------------+--------------+
+
+# Results
+```{r, include=FALSE}
+#Create probable response variable, as we are using the uncertain condition
+stage1 <- stage1 %>%
+  mutate(prob_response = case_when((cue1 == 1 | cue1 == 3) & cue_o_mouse.clicked_name == "o1_image" ~ 1,
+                                   (cue1 == 1 | cue1 == 3) & cue_o_mouse.clicked_name == "o2_image" ~ 0, 
+                                   (cue1 == 2 | cue1 == 4) & cue_o_mouse.clicked_name == "o1_image" ~ 0,
+                                   (cue1 == 2 | cue1 == 4) & cue_o_mouse.clicked_name == "o2_image" ~ 1))
+stage2 <- stage2 %>%
+  mutate(prob_response = case_when((cue1 == 1 | cue1 == 3) & cue_o_mouse.clicked_name == "o1_image" ~ 1,
+                                   (cue1 == 1 | cue1 == 3) & cue_o_mouse.clicked_name == "o2_image" ~ 0, 
+                                   (cue1 == 2 | cue1 == 4) & cue_o_mouse.clicked_name == "o1_image" ~ 0,
+                                   (cue1 == 2 | cue1 == 4) & cue_o_mouse.clicked_name == "o2_image" ~ 1))
+#some exclusion criteria
+block6 <- filter(stage1, block == 6) %>%
+  group_by(pNum, condition) %>%
+  summarise (mean_response = mean(prob_response, na.rm = TRUE))
+
+low_acc <- filter(block6, mean_response < 0.6) 
+low_acc <- low_acc$pNum
+
+stage1 <- filter(stage1, !pNum %in% not_passed_pNum & !pNum %in% low_acc)
+stage2 <- filter(stage2, !pNum %in% not_passed_pNum & !pNum %in% low_acc)
+test <- filter(test, !pNum %in% not_passed_pNum & !pNum %in% low_acc)
+
+
+N <- unique(stage1$pNum)
+```
+
+## Training
+
+
+```{r, include=FALSE}
+#Plot Training accuracy
+stage1$condition <- as.factor(stage1$condition)
+MA_stage1 <- stage1[complete.cases(stage1$prob_response), ] %>%
+  group_by(stage, block, condition) %>%
+  summarise(mean_prob_response = mean(prob_response, na.rm = TRUE), 
+            se_accuracy = sd(prob_response, na.rm = TRUE)/sqrt(length(prob_response)))
+stage2$condition <- as.factor(stage2$condition)
+MA_stage2 <- stage2[complete.cases(stage2$prob_response), ] %>%
+  group_by(stage, block, condition) %>%
+  summarise(mean_prob_response = mean(prob_response, na.rm = TRUE), 
+            se_accuracy = sd(prob_response, na.rm = TRUE)/sqrt(length(prob_response)))
+MA_stage2_dummy <- data.frame(stage = c('stage 2', 'stage 2', 'stage 2', 'stage 2'),
+                              block = c(7:10),
+                              condition = c('Certain_short', 'Certain_short', 'Certain_short', 'Certain_short'),
+                              mean_prob_response = c(0.1, 0.2, 0.3, 0.4),
+                              se_accuracy = c(0.0001, 0.00020, 0.0003, 0.00004))
+MA_training <- rbind(MA_stage1, MA_stage2, MA_stage2_dummy)
+```
+
+```{r, echo=FALSE}
+ggplot(MA_training) +
+  geom_point(mapping = aes(x = block, y = mean_prob_response, color = condition)) +
+  geom_line(mapping = aes(x = block, y = mean_prob_response, color = condition)) +
+  geom_errorbar(aes(x= block, y = mean_prob_response, ymin = mean_prob_response-se_accuracy, ymax = mean_prob_response+se_accuracy), color = "black", width=.1,position=position_dodge(0.05)) +
+  facet_grid(cols = vars(stage), space = "free_x", scales = "free_x") + 
+  scale_x_continuous(name = "Block", breaks = c(1, 2, 3, 4, 5, 6, 1, 2, 3, 4), minor_breaks = NULL) +
+  scale_y_continuous(name="Proportion of probable responses", limits=c(0.5, 1)) +
+  labs(title = "Mean proportion of probable responses for the first stage of the training phase")
+  
+```
+
+### Stage 1
+
+
+```{r, include = FALSE}
+#some t test to check that responding is significantly higher than chance
+mean_stage1_certain <- filter(stage1, condition == "Certain") %>%
+  group_by(pNum) %>%
+   summarise(mean_response = mean(prob_response, na.rm = TRUE))
+t_mean_certain_stage1 <- t.test(mean_stage1_certain, mu = .5, alternative = "greater") 
+print (t_mean_certain_stage1)
+bay_t_mean_certain_stage1 <- ttestBF(mean_stage1_certain$mean_response, mu = .5)
+print(bay_t_mean_certain_stage1)
+```
+
+```{r, include = FALSE}
+#some t test to check that responding is significantly higher than chance
+mean_stage1_uncertain <- filter(stage1, condition == "Uncertain") %>%
+  group_by(pNum) %>%
+   summarise(mean_response = mean(prob_response, na.rm = TRUE))
+t_mean_uncertain_stage1 <- t.test(mean_stage1_uncertain, mu = .5, alternative = "greater") 
+print (t_mean_uncertain_stage1)
+bay_t_mean_uncertain_stage1 <- ttestBF(mean_stage1_uncertain$mean_response, mu = .5)
+print(bay_t_mean_uncertain_stage1)
+```
+
+```{r, include = FALSE}
+#some t test to check that responding is significantly higher than chance
+mean_stage1_cs <- filter(stage1, condition == "Certain_short") %>%
+  group_by(pNum) %>%
+   summarise(mean_response = mean(prob_response, na.rm = TRUE))
+t_mean_cs_stage1 <- t.test(mean_stage1_cs, mu = .5, alternative = "greater") 
+print (t_mean_cs_stage1)
+bay_t_mean_cs_stage1 <- ttestBF(mean_stage1_cs$mean_response, mu = .5)
+print(bay_t_mean_cs_stage1)
+```
+One-sample t-test indicates that mean responding in stage 1 was significantly higher than 0.5, that is, chance level, for all groups (Certain: `r apa(t_mean_certain_stage1)`, `r report_BF_and_error(bay_t_mean_certain_stage1[1])`, Uncertain: `r apa(t_mean_uncertain_stage1)`, `r report_BF_and_error(bay_t_mean_uncertain_stage1[1])`, Certain short: `r apa(t_mean_cs_stage1)`, `r report_BF_and_error(bay_t_mean_cs_stage1[1])`).
+
+```{r, include=FALSE}
+#ANOVA
+resp_s1 <- stage1 %>%
+  group_by (pNum, block, condition) %>%
+  summarise(mean_response = mean(prob_response, na.rm = TRUE))
+resp_s1$block <- factor(resp_s1$block)
+resp_s1$condition <- factor(resp_s1$condition)
+resp_s1$pNum <- factor(resp_s1$pNum)
+ANOVA_resp_s1 <- aov_car(formula = mean_response ~ condition + Error(pNum/block), data = resp_s1)
+print(ANOVA_resp_s1)
+
+bay_ANOVA_resp_s1 <- anovaBF(formula = mean_response ~ condition + block + pNum,
+        data = data.frame(resp_s1),
+        whichRandom = "pNum")
+print(bay_ANOVA_resp_s1)
+bay_ANOVA_resp_s1_int <- bay_ANOVA_resp_s1[4]/bay_ANOVA_resp_s1[3]
+print(bay_ANOVA_resp_s1_int)
+```
+
+In stage 1, all groups showed a similar increase in accuracy as blocks progressed. A mixed methods ANOVA confirmed a significant effect of the Block (`r apa(ANOVA_resp_s1, effect = "block")`, `r report_BF_and_error(bay_ANOVA_resp_s1[1])`), and the non-significant effect of the Condition (`r apa(ANOVA_resp_s1, effect = "condition" )`, `r report_BF_and_error(bay_ANOVA_resp_s1[2])`) and the interaction (`r apa(ANOVA_resp_s1, effect = "condition:block")`, `r report_BF_and_error(bay_ANOVA_resp_s1_int[1])`). Extreme evidence in favor of the alternative hypothesis was found for the effect of the Block, strong evidence in favor of the null for the Condition and extreme evidence for the null hypothesis in the case of the interaction.
+
+### Stage 2
+
+
+```{r, include = FALSE}
+#some t test to check that responding is significantly higher than chance
+mean_stage2_certain <- filter(stage2, condition == "Certain") %>%
+  group_by(pNum) %>%
+   summarise(mean_response = mean(prob_response, na.rm = TRUE))
+t_mean_certain_stage2 <- t.test(mean_stage2_certain, mu = .5, alternative = "greater") 
+print (t_mean_certain_stage2)
+bay_t_mean_certain_stage2 <- ttestBF(mean_stage2_certain$mean_response, mu = .5)
+print(bay_t_mean_certain_stage2)
+```
+
+```{r, include = FALSE}
+#some t test to check that responding is significantly higher than chance
+mean_stage2_uncertain <- filter(stage2, condition == "Uncertain") %>%
+  group_by(pNum) %>%
+   summarise(mean_response = mean(prob_response, na.rm = TRUE))
+t_mean_uncertain_stage2 <- t.test(mean_stage2_uncertain, mu = .5, alternative = "greater") 
+print (t_mean_uncertain_stage2)
+bay_t_mean_uncertain_stage2 <- ttestBF(mean_stage2_uncertain$mean_response, mu = .5)
+print(bay_t_mean_uncertain_stage2)
+```
+
+One-sample t-test indicates that mean responding of the certain group in stage 2 was significantly higher than 0.5, that is, chance level (`r apa(t_mean_certain_stage2)`, `r report_BF_and_error(bay_t_mean_certain_stage2[1])`). Same was true for the uncertain group (`r apa(t_mean_uncertain_stage2)`, `r report_BF_and_error(bay_t_mean_uncertain_stage2[1])`).
+
+```{r, include=FALSE}
+#ANOVA
+resp_s2 <- stage2 %>%
+  group_by (pNum, block, condition) %>%
+  summarise(mean_response = mean(prob_response, na.rm = TRUE))
+resp_s2$block <- factor(resp_s2$block)
+resp_s2$condition <- factor(resp_s2$condition)
+resp_s2$pNum <- factor(resp_s2$pNum)
+ANOVA_resp_s2 <- aov_car(formula = mean_response ~ condition + Error(pNum/block), data = resp_s2)
+print(ANOVA_resp_s2)
+
+bay_ANOVA_resp_s2 <- anovaBF(formula = mean_response ~ condition + block + pNum,
+        data = data.frame(resp_s2),
+        whichRandom = "pNum")
+print(bay_ANOVA_resp_s2)
+bay_ANOVA_resp_s2_int <- bay_ANOVA_resp_s2[4]/bay_ANOVA_resp_s2[3]
+print(bay_ANOVA_resp_s2_int)
+```
+
+In stage 2, both groups showed stable accuracy on the 4 blocks, but the uncertain group was consistently less accurate than the certain group . A mixed methods ANOVA confirmed a significant effect of the Condition (`r apa(ANOVA_resp_s2, effect = "condition")`, `r report_BF_and_error(bay_ANOVA_resp_s2[2])`), and the non-significant effect of the Block (`r apa(ANOVA_resp_s2, effect = "block" )`, `r report_BF_and_error(bay_ANOVA_resp_s2[1])`) and the interaction (`r apa(ANOVA_resp_s2, effect = "condition:block")`, `r report_BF_and_error(bay_ANOVA_resp_s2_int[1])`). Extreme evidence in favor of the alternative hypothesis was found for the effect of the Condition and strong evidence in favor of the null for the Block and the interaction.
+
+### All training phase
+```{r, include=FALSE}
+#ANOVA
+stage1_full <- filter(filter(stage1, condition == 'Certain' | condition == 'Uncertain'))
+training <- rbind(stage1_full, stage2)
+```
+
+```{r, include=FALSE}
+#some t test to check that responding is significantly higher than chance
+mean_resp <- training %>%
+  group_by(pNum) %>%
+   summarise(mean_response = mean(prob_response, na.rm = TRUE))
+t_mean_resp <- t.test(mean_resp, mu = .5, alternative = "greater") 
+print (t_mean_resp)
+bay_t_mean_resp <- ttestBF(mean_resp$mean_response, mu = .5)
+print(bay_t_mean_resp)
+```
+
+One-sample t-test indicated that mean responding in the training phase was significantly higher than 0.5, that is, chance level (`r apa(t_mean_resp)`, `r report_BF_and_error(bay_t_mean_resp[1])`). 
+
+```{r, include=FALSE}
+#ANOVA
+resp <- training %>%
+  group_by (pNum, block, condition) %>%
+  summarise(mean_response = mean(prob_response, na.rm = TRUE))
+resp$block <- factor(resp$block)
+resp$condition <- factor(resp$condition)
+resp$pNum <- factor(resp$pNum)
+ANOVA_resp <- aov_car(formula = mean_response ~ condition + Error(pNum/block), data = resp)
+print(ANOVA_resp)
+
+bay_ANOVA_resp <- anovaBF(formula = mean_response ~ condition + block + pNum,
+        data = data.frame(resp),
+        whichRandom = "pNum")
+print(bay_ANOVA_resp)
+bay_ANOVA_resp_int <- bay_ANOVA_resp[4]/bay_ANOVA_resp[3]
+print(bay_ANOVA_resp_int)
+```
+```{r, include = FALSE}
+# Pairwise comparisons between group levels
+#interaction analysis
+resp_interaction <- emmeans(ANOVA_resp, ~ block|condition)
+pairs(resp_interaction, adjust = "bon")
+resp_interaction2 <- emmeans(ANOVA_resp, ~ condition|block)
+pairs(resp_interaction2, adjust = "bon")
+```
+
+When both stages where analysed together, there was a significant effect of the Block (`r apa(ANOVA_resp, effect = "block" )`, `r report_BF_and_error(bay_ANOVA_resp[1])`) and the interaction (`r apa(ANOVA_resp, effect = "condition:block")`, `r report_BF_and_error(bay_ANOVA_resp_int[1])`), but not of the Condition (`r apa(ANOVA_resp, effect = "condition")`, `r report_BF_and_error(bay_ANOVA_resp[2])`). Anecdotal evidence in favor of the null hypothesis was found for the effect of the Condition and extreme evidence in favor of the alternative for the Block and the interaction. Bonferroni corrected pairwise comparisons showed that there were only significant differences between the certain and the uncertain condition in stage 2 blocks (*t*(52) > 3.274, *p* < .002). 
+
+
+## Test
+
+### Accuracy
+
+```{r, include = FALSE}
+MA_test <- test %>%
+  group_by(cue_type, condition) %>%
+  summarise(mean_acc = mean(acc, na.rm = TRUE),
+            sd_acc = sd(acc, na.rm = TRUE)/sqrt(length(acc)))
+```
+
+```{r, echo = FALSE}
+ggplot(MA_test) +
+  geom_col(mapping = aes(x = cue_type, y = mean_acc, fill = condition)) +
+  geom_errorbar(aes(x= cue_type, y = mean_acc, ymin = mean_acc-sd_acc, ymax = mean_acc+sd_acc), color = "black", width=.1,position=position_dodge(0.05)) +
+  scale_x_discrete(name = "Type of cue") +
+  scale_y_continuous(name="Accuracy") +
+  labs(title = "Mean accuracy in the test phase")
+```
+
+```{r, include=FALSE}
+#ANOVA
+acc_test <- test %>%
+  group_by (pNum, condition, predictiveness) %>%
+  summarise(mean_acc = mean(acc, na.rm = TRUE))
+acc_test$pNum <- factor(acc_test$pNum)
+acc_test$condition <- factor(acc_test$condition)
+acc_test$predictiveness <- factor(acc_test$predictiveness)
+ANOVA_acc_test <- aov_car(formula = mean_acc ~ condition + Error(pNum/predictiveness), data = acc_test)
+print(ANOVA_acc_test)
+
+bay_ANOVA_acc_test <- anovaBF(formula = mean_acc ~ condition + predictiveness + pNum,
+        data = data.frame(acc_test),
+        whichRandom = "pNum")
+print(bay_ANOVA_acc_test)
+bay_ANOVA_acc_test_int <- bay_ANOVA_acc_test[4]/bay_ANOVA_acc_test[3]
+print(bay_ANOVA_acc_test_int)
+```
+```{r, include = FALSE}
+# Pairwise comparisons between group levels
+#condition analysis
+acc_test_condition <- emmeans(ANOVA_acc_test, ~ condition)
+pairs(acc_test_condition, adjust = "bon")
+```
+
+Responding was higher in the uncertain group than in the certain groups. In all groups, accuracy was lower for non-predictive than predictive cues, but this difference was smaller in the uncertain group. A mixed model ANOVA found significant the effect of the Condition and  Predictivenes, but not the interaction (Condition: `r apa(ANOVA_acc_test, effect = "condition")`, `r report_BF_and_error(bay_ANOVA_acc_test[1])`; Predictiveness: `r apa(ANOVA_acc_test, effect = "predictiveness")`, `r report_BF_and_error(bay_ANOVA_acc_test[2])`; ConditionxPredictiveness: `r apa(ANOVA_acc_test, effect = "condition:predictiveness")`, `r report_BF_and_error(bay_ANOVA_acc_test_int[1])`). Bayesian evidence was moderate for the alternative hypothesis for Condition, extreme for the Predictiveness and anecdotal null for the interaction. Bonferroni corrected pairwise comparisons showed that there were significant differences between the certain and uncertain groups (*t*(87) = 2.916, *p* = 0.014) and between the Certain short and Uncertain group (*t*(87) = 2.979, *p* = 0.011).
+
+### Memory score
+
+```{r, include = FALSE}
+MM_test <- test %>%
+  group_by(cue_type, condition) %>%
+  summarise(mean_mem = mean(mem_score, na.rm = TRUE),
+            sd_mem = sd(mem_score, na.rm = TRUE)/sqrt(length(mem_score)))
+```
+
+```{r, echo = FALSE}
+ggplot(MM_test) +
+  geom_col(mapping = aes(x = cue_type, y = mean_mem, fill = condition)) +
+  geom_errorbar(aes(x= cue_type, y = mean_mem, ymin = mean_mem-sd_mem, ymax = mean_mem+sd_mem), color = "black", width=.1,position=position_dodge(0.05)) +
+  scale_x_discrete(name = "Type of cue") +
+  scale_y_continuous(name="Memory score") +
+  labs(title = "Mean memory score in the test phase")
+```
+
+```{r, include=FALSE}
+#ANOVA
+mem_test <- test %>%
+  group_by (pNum, condition, predictiveness) %>%
+  summarise(mean_mem = mean(mem_score, na.rm = TRUE))
+mem_test$pNum <- factor(mem_test$pNum)
+mem_test$condition <- factor(mem_test$condition)
+mem_test$predictiveness <- factor(mem_test$predictiveness)
+ANOVA_mem_test <- aov_car(formula = mean_mem ~ condition + Error(pNum/predictiveness), data = mem_test)
+print(ANOVA_mem_test)
+
+bay_ANOVA_mem_test <- anovaBF(formula = mean_mem ~ condition + predictiveness + pNum,
+        data = data.frame(mem_test),
+        whichRandom = "pNum")
+print(bay_ANOVA_mem_test)
+bay_ANOVA_mem_test_int <- bay_ANOVA_mem_test[4]/bay_ANOVA_mem_test[3]
+print(bay_ANOVA_mem_test_int)
+```
+
+```{r, include = FALSE}
+# Pairwise comparisons between group levels
+#interaction analysis
+#mem_test_interaction <- emmeans(ANOVA_mem_test, ~ predictiveness|condition)
+#pairs(mem_test_interaction, adjust = "bon")
+#mem_test_interaction2 <- emmeans(ANOVA_mem_test, ~ condition|predictiveness)
+#pairs(mem_test_interaction2, adjust = "bon")
+#condition ananlysis
+mem_test_condition <- emmeans(ANOVA_mem_test, ~ condition)
+pairs(mem_test_condition, adjust = "bon")
+```
+
+Responding was higher in the uncertain group than in the certain groups. In all groups, memory score was lower for non-predictive than predictive cues, but this difference was smaller in the uncertain group. There were  significant differences in memory due to the Condition, with the bayesian anova indicating moderate evidence for the alternative hypothesis (`r apa(ANOVA_mem_test, effect = "condition")`, `r report_BF_and_error(bay_ANOVA_mem_test[1])`) and also due to Predictiveness, showing extreme bayesian evidence (`r apa(ANOVA_mem_test, effect = "predictiveness")`, `r report_BF_and_error(bay_ANOVA_mem_test[2])`). The interaction was not found significant, showing anecdotal Bayesian evidence (`r apa(ANOVA_acc_test, effect = "condition:predictiveness")`, `r report_BF_and_error(bay_ANOVA_acc_test_int[1])`). Bonferroni corrected pairwise comparisons showed that there were significant differences between the certain and uncertain groups (*t*(87) = 2.89, *p* = 0.015) and between the Certain short and Uncertain group (*t*(87) = 2.998, *p* = 0.011)
+
+### Corrected memory score (hits x1, errors x0)
+
+```{r, include = FALSE}
+Mc_mem_test <- test %>%
+  group_by(cue_type, condition) %>%
+  summarise(mean_c_mem = mean(c_mem_score, na.rm = TRUE),
+            sd_c_mem = sd(c_mem_score, na.rm = TRUE)/sqrt(length(c_mem_score)))
+```
+
+```{r, echo = FALSE}
+ggplot(Mc_mem_test) +
+  geom_col(mapping = aes(x = cue_type, y = mean_c_mem, fill = condition)) +
+  geom_errorbar(aes(x= cue_type, y = mean_c_mem, ymin = mean_c_mem-sd_c_mem, ymax = mean_c_mem+sd_c_mem), color = "black", width=.1,position=position_dodge(0.05)) +
+  scale_x_discrete(name = "Type of cue") +
+  scale_y_continuous(name="Corrected memory score") +
+  labs(title = "Mean corrected memory score in the test phase")
+```
+
+```{r, include=FALSE}
+#ANOVA
+c_mem_test <- test %>%
+  group_by (pNum, condition, predictiveness) %>%
+  summarise(mean_c_mem = mean(c_mem_score, na.rm = TRUE))
+c_mem_test$pNum <- factor(c_mem_test$pNum)
+c_mem_test$condition <- factor(c_mem_test$condition)
+c_mem_test$predictiveness <- factor(c_mem_test$predictiveness)
+ANOVA_c_mem_test <- aov_car(formula = mean_c_mem ~ condition + Error(pNum/predictiveness), data = c_mem_test)
+print(ANOVA_c_mem_test)
+
+bay_ANOVA_c_mem_test <- anovaBF(formula = mean_c_mem ~ condition + predictiveness + pNum,
+        data = data.frame(c_mem_test),
+        whichRandom = "pNum")
+print(bay_ANOVA_c_mem_test)
+bay_ANOVA_c_mem_test_int <- bay_ANOVA_c_mem_test[4]/bay_ANOVA_c_mem_test[3]
+print(bay_ANOVA_c_mem_test_int)
+```
+
+```{r, include = FALSE}
+# Pairwise comparisons between group levels
+#interaction analysis
+#c_mem_test_interaction <- emmeans(ANOVA_c_mem_test, ~ predictiveness|condition)
+#pairs(c_mem_test_interaction, adjust = "bon")
+#c_mem_test_interaction2 <- emmeans(ANOVA_c_mem_test, ~ condition|predictiveness)
+#pairs(c_mem_test_interaction2, adjust = "bon")
+#condition analysis
+c_mem_test_condition<- emmeans(ANOVA_c_mem_test, ~ condition)
+pairs(c_mem_test_condition, adjust = "bon")
+```
+
+There were significant differences in memory due to the condition, with the bayesian analysis indicating moderate evidence for the alternative hypothesis (`r apa(ANOVA_c_mem_test, effect = "condition")`, `r report_BF_and_error(bay_ANOVA_c_mem_test[1])`; ). There was also a significant effect of Predictiveness, supported by extreme bayesian evidence (`r apa(ANOVA_c_mem_test, effect = "predictiveness")`, `r report_BF_and_error(bay_ANOVA_c_mem_test[2])`). However, the effect of interaction was found non-significant, being the bayesian evidence anecdotal null (`r apa(ANOVA_c_mem_test, effect = "condition:predictiveness")`, `r report_BF_and_error(bay_ANOVA_c_mem_test_int[1])`).  Bonferroni corrected pairwise comparisons showed that there were significant differences between the certain short and uncertain groups (*t*(87) = 2.748, *p* = 0.022).
+
+### Corrected memory score (hits x1, errors out)
+
+```{r, include = FALSE}
+Mc_mem_test <- filter(test, acc == 1) %>%
+  group_by(cue_type, condition) %>%
+  summarise(mean_c_mem = mean(c_mem_score, na.rm = TRUE),
+            sd_c_mem = sd(c_mem_score, na.rm = TRUE)/sqrt(length(c_mem_score)))
+```
+
+```{r, echo = FALSE}
+ggplot(Mc_mem_test) +
+  geom_col(mapping = aes(x = cue_type, y = mean_c_mem, fill = condition)) +
+  geom_errorbar(aes(x= cue_type, y = mean_c_mem, ymin = mean_c_mem-sd_c_mem, ymax = mean_c_mem+sd_c_mem), color = "black", width=.1,position=position_dodge(0.05)) +
+  scale_x_discrete(name = "Type of cue") +
+  scale_y_continuous(name="Corrected memory score") +
+  labs(title = "Mean corrected memory score in the test phase")
+```
+
+```{r, include=FALSE}
+#ANOVA
+c_mem_test <- filter(test, acc == 1) %>%
+  group_by (pNum, condition, predictiveness) %>%
+  summarise(mean_c_mem = mean(c_mem_score, na.rm = TRUE))
+c_mem_test$pNum <- factor(c_mem_test$pNum)
+c_mem_test$condition <- factor(c_mem_test$condition)
+c_mem_test$predictiveness <- factor(c_mem_test$predictiveness)
+ANOVA_c_mem_test <- aov_car(formula = mean_c_mem ~ condition + Error(pNum/predictiveness), data = c_mem_test)
+print(ANOVA_c_mem_test)
+
+bay_ANOVA_c_mem_test <- anovaBF(formula = mean_c_mem ~ condition + predictiveness + pNum,
+        data = data.frame(c_mem_test),
+        whichRandom = "pNum")
+print(bay_ANOVA_c_mem_test)
+bay_ANOVA_c_mem_test_int <- bay_ANOVA_c_mem_test[4]/bay_ANOVA_c_mem_test[3]
+print(bay_ANOVA_c_mem_test_int)
+```
+
+```{r, include = FALSE}
+# Pairwise comparisons between group levels
+#interaction analysis
+#c_mem_test_interaction <- emmeans(ANOVA_c_mem_test, ~ predictiveness|condition)
+#pairs(c_mem_test_interaction, adjust = "bon")
+#c_mem_test_interaction2 <- emmeans(ANOVA_c_mem_test, ~ condition|predictiveness)
+#pairs(c_mem_test_interaction2, adjust = "bon")
+```
+
+There were no significant differences in memory due to the Condition(`r apa(ANOVA_c_mem_test, effect = "condition")`, `r report_BF_and_error(bay_ANOVA_c_mem_test[1])`) nor the interaction (`r apa(ANOVA_c_mem_test, effect = "condition:predictiveness")`, `r report_BF_and_error(bay_ANOVA_c_mem_test_int[1])`). The effect of Predictiveness was significant(`r apa(ANOVA_c_mem_test, effect = "predictiveness")`, `r report_BF_and_error(bay_ANOVA_c_mem_test[2])`) Bayesian evidence was anecdotal null for the Condition, anecdotal alternative the interaction and very strong for Predictiveness.
+
+## Test without the certain_short condition
+
+### Accuracy
+```{r, include = FALSE}
+test_2g <- filter(test, condition == "Certain" | condition == "Uncertain")
+```
+
+```{r, include = FALSE}
+MA_test_2g <- test_2g %>%
+  group_by(cue_type, condition) %>%
+  summarise(mean_acc = mean(acc, na.rm = TRUE),
+            sd_acc = sd(acc, na.rm = TRUE)/sqrt(length(acc)))
+```
+
+```{r, echo = FALSE}
+ggplot(MA_test_2g) +
+  geom_col(mapping = aes(x = cue_type, y = mean_acc, fill = condition)) +
+  geom_errorbar(aes(x= cue_type, y = mean_acc, ymin = mean_acc-sd_acc, ymax = mean_acc+sd_acc), color = "black", width=.1,position=position_dodge(0.05)) +
+  scale_x_discrete(name = "Type of cue") +
+  scale_y_continuous(name="Accuracy") +
+  labs(title = "Mean accuracy in the test phase")
+```
+
+```{r, include=FALSE}
+#ANOVA
+acc_test_2g <- test_2g %>%
+  group_by (pNum, condition, predictiveness) %>%
+  summarise(mean_acc = mean(acc, na.rm = TRUE))
+acc_test_2g$pNum <- factor(acc_test_2g$pNum)
+acc_test_2g$condition <- factor(acc_test_2g$condition)
+acc_test_2g$predictiveness <- factor(acc_test_2g$predictiveness)
+ANOVA_acc_test_2g <- aov_car(formula = mean_acc ~ condition + Error(pNum/predictiveness), data = acc_test_2g)
+print(ANOVA_acc_test_2g)
+
+bay_ANOVA_acc_test_2g <- anovaBF(formula = mean_acc ~ condition + predictiveness + pNum,
+        data = data.frame(acc_test_2g),
+        whichRandom = "pNum")
+print(bay_ANOVA_acc_test_2g)
+bay_ANOVA_acc_test_2g_int <- bay_ANOVA_acc_test_2g[4]/bay_ANOVA_acc_test_2g[3]
+print(bay_ANOVA_acc_test_2g_int)
+```
+```{r, include = FALSE}
+# Pairwise comparisons between group levels
+#condition analysis
+#acc_test_2g_condition <- emmeans(ANOVA_acc_test_2g, ~ condition)
+#pairs(acc_test_2g_condition, adjust = "bon")
+```
+
+Responding was higher in the uncertain group than in the certain group. In both groups, accuracy was lower for non-predictive than predictive cues, but this difference was smaller in the uncertain group. A mixed model ANOVA found significant the effect of the Condition and  Predictivenes, but not the interaction (Condition: `r apa(ANOVA_acc_test_2g, effect = "condition")`, `r report_BF_and_error(bay_ANOVA_acc_test_2g[1])`; Predictiveness: `r apa(ANOVA_acc_test_2g, effect = "predictiveness")`, `r report_BF_and_error(bay_ANOVA_acc_test_2g[2])`; ConditionxPredictiveness: `r apa(ANOVA_acc_test_2g, effect = "condition:predictiveness")`, `r report_BF_and_error(bay_ANOVA_acc_test_2g_int[1])`). Bayesian evidence was moderate for the alternative hypothesis for Condition and Predictiveness and anecdotal null for the interaction. 
+
+### Memory score
+
+```{r, include = FALSE}
+MM_test_2g <- test_2g %>%
+  group_by(cue_type, condition) %>%
+  summarise(mean_mem = mean(mem_score, na.rm = TRUE),
+            sd_mem = sd(mem_score, na.rm = TRUE)/sqrt(length(mem_score)))
+```
+
+```{r, echo = FALSE}
+ggplot(MM_test_2g) +
+  geom_col(mapping = aes(x = cue_type, y = mean_mem, fill = condition)) +
+  geom_errorbar(aes(x= cue_type, y = mean_mem, ymin = mean_mem-sd_mem, ymax = mean_mem+sd_mem), color = "black", width=.1,position=position_dodge(0.05)) +
+  scale_x_discrete(name = "Type of cue") +
+  scale_y_continuous(name="Memory score") +
+  labs(title = "Mean memory score in the test phase")
+```
+
+```{r, include=FALSE}
+#ANOVA
+mem_test_2g <- test_2g %>%
+  group_by (pNum, condition, predictiveness) %>%
+  summarise(mean_mem = mean(mem_score, na.rm = TRUE))
+mem_test_2g$pNum <- factor(mem_test_2g$pNum)
+mem_test_2g$condition <- factor(mem_test_2g$condition)
+mem_test_2g$predictiveness <- factor(mem_test_2g$predictiveness)
+ANOVA_mem_test_2g <- aov_car(formula = mean_mem ~ condition + Error(pNum/predictiveness), data = mem_test_2g)
+print(ANOVA_mem_test_2g)
+
+bay_ANOVA_mem_test_2g <- anovaBF(formula = mean_mem ~ condition + predictiveness + pNum,
+        data = data.frame(mem_test_2g),
+        whichRandom = "pNum")
+print(bay_ANOVA_mem_test_2g)
+bay_ANOVA_mem_test_2g_int <- bay_ANOVA_mem_test_2g[4]/bay_ANOVA_mem_test_2g[3]
+print(bay_ANOVA_mem_test_2g_int)
+```
+
+```{r, include = FALSE}
+# Pairwise comparisons between group levels
+#interaction analysis
+#mem_test_interaction <- emmeans(ANOVA_mem_test, ~ predictiveness|condition)
+#pairs(mem_test_interaction, adjust = "bon")
+#mem_test_interaction2 <- emmeans(ANOVA_mem_test, ~ condition|predictiveness)
+#pairs(mem_test_interaction2, adjust = "bon")
+#condition ananlysis
+#mem_test_condition <- emmeans(ANOVA_mem_test, ~ condition)
+#pairs(mem_test_condition, adjust = "bon")
+```
+
+Responding was higher in the uncertain group than in the certain group. In both groups, memory score was lower for non-predictive than predictive cues, but this difference was smaller in the uncertain group. There weresignificant differences in memory due to the Condition, with the bayesian anova indicating moderate evidence for the alternative hypothesis (`r apa(ANOVA_mem_test, effect = "condition")`, `r report_BF_and_error(bay_ANOVA_mem_test[1])`) and also due to Predictiveness, showing strong bayesian evidence (`r apa(ANOVA_mem_test, effect = "predictiveness")`, `r report_BF_and_error(bay_ANOVA_mem_test[2])`). The interaction was not found significant, showing anecdotal null Bayesian evidence (`r apa(ANOVA_acc_test, effect = "condition:predictiveness")`, `r report_BF_and_error(bay_ANOVA_acc_test_int[1])`).
+
+### Corrected memory score (hits x1, errors x0)
+
+```{r, include = FALSE}
+Mc_mem_test_2g <- test_2g %>%
+  group_by(cue_type, condition) %>%
+  summarise(mean_c_mem = mean(c_mem_score, na.rm = TRUE),
+            sd_c_mem = sd(c_mem_score, na.rm = TRUE)/sqrt(length(c_mem_score)))
+```
+
+```{r, echo = FALSE}
+ggplot(Mc_mem_test_2g) +
+  geom_col(mapping = aes(x = cue_type, y = mean_c_mem, fill = condition)) +
+  geom_errorbar(aes(x= cue_type, y = mean_c_mem, ymin = mean_c_mem-sd_c_mem, ymax = mean_c_mem+sd_c_mem), color = "black", width=.1,position=position_dodge(0.05)) +
+  scale_x_discrete(name = "Type of cue") +
+  scale_y_continuous(name="Corrected memory score") +
+  labs(title = "Mean corrected memory score in the test phase")
+```
+
+```{r, include=FALSE}
+#ANOVA
+c_mem_test_2g <- test_2g %>%
+  group_by (pNum, condition, predictiveness) %>%
+  summarise(mean_c_mem = mean(c_mem_score, na.rm = TRUE))
+c_mem_test_2g$pNum <- factor(c_mem_test_2g$pNum)
+c_mem_test_2g$condition <- factor(c_mem_test_2g$condition)
+c_mem_test_2g$predictiveness <- factor(c_mem_test_2g$predictiveness)
+ANOVA_c_mem_test_2g <- aov_car(formula = mean_c_mem ~ condition + Error(pNum/predictiveness), data = c_mem_test_2g)
+print(ANOVA_c_mem_test_2g)
+
+bay_ANOVA_c_mem_test_2g <- anovaBF(formula = mean_c_mem ~ condition + predictiveness + pNum,
+        data = data.frame(c_mem_test_2g),
+        whichRandom = "pNum")
+print(bay_ANOVA_c_mem_test_2g)
+bay_ANOVA_c_mem_test_2g_int <- bay_ANOVA_c_mem_test_2g[4]/bay_ANOVA_c_mem_test_2g[3]
+print(bay_ANOVA_c_mem_test_2g_int)
+```
+
+```{r, include = FALSE}
+# Pairwise comparisons between group levels
+#interaction analysis
+c_mem_test_2g_interaction <- emmeans(ANOVA_c_mem_test_2g, ~ predictiveness|condition)
+pairs(c_mem_test_2g_interaction, adjust = "bon")
+c_mem_test_2g_interaction2 <- emmeans(ANOVA_c_mem_test_2g, ~ condition|predictiveness)
+pairs(c_mem_test_2g_interaction2, adjust = "bon")
+#condition analysis
+#c_mem_test_condition<- emmeans(ANOVA_c_mem_test, ~ condition)
+#pairs(c_mem_test_condition, adjust = "bon")
+```
+
+There were significant differences in memory due to the condition, with the bayesian analysis indicating anecdotal evidence for the alternative hypothesis (`r apa(ANOVA_c_mem_test, effect = "condition")`, `r report_BF_and_error(bay_ANOVA_c_mem_test[1])`), of Predictiveness, supported by strong bayesian evidence (`r apa(ANOVA_c_mem_test, effect = "predictiveness")`, `r report_BF_and_error(bay_ANOVA_c_mem_test[2])`), and of the interaction, being the bayesian evidence anecdotal (`r apa(ANOVA_c_mem_test, effect = "condition:predictiveness")`, `r report_BF_and_error(bay_ANOVA_c_mem_test_int[1])`).  Bonferroni corrected pairwise comparisons showed that there were significant differences between the certain short and uncertain groups for predictive cues (*t*(58) = 3.042, *p* = 0.004), and that differences between predictive and non-predictive cues were only evident on the certain group (*t*(58) = 4.008, *p* , .001).
+
+### Corrected memory score (hits x1, errors out)
+
+```{r, include = FALSE}
+Mc_mem_test_2g <- filter(test_2g, acc == 1) %>%
+  group_by(cue_type, condition) %>%
+  summarise(mean_c_mem = mean(c_mem_score, na.rm = TRUE),
+            sd_c_mem = sd(c_mem_score, na.rm = TRUE)/sqrt(length(c_mem_score)))
+```
+
+```{r, echo = FALSE}
+ggplot(Mc_mem_test_2g) +
+  geom_col(mapping = aes(x = cue_type, y = mean_c_mem, fill = condition)) +
+  geom_errorbar(aes(x= cue_type, y = mean_c_mem, ymin = mean_c_mem-sd_c_mem, ymax = mean_c_mem+sd_c_mem), color = "black", width=.1,position=position_dodge(0.05)) +
+  scale_x_discrete(name = "Type of cue") +
+  scale_y_continuous(name="Corrected memory score") +
+  labs(title = "Mean corrected memory score in the test phase")
+```
+
+```{r, include=FALSE}
+#ANOVA
+c_mem_test_2g <- filter(test_2g, acc == 1) %>%
+  group_by (pNum, condition, predictiveness) %>%
+  summarise(mean_c_mem = mean(c_mem_score, na.rm = TRUE))
+c_mem_test_2g$pNum <- factor(c_mem_test_2g$pNum)
+c_mem_test_2g$condition <- factor(c_mem_test_2g$condition)
+c_mem_test_2g$predictiveness <- factor(c_mem_test_2g$predictiveness)
+ANOVA_c_mem_test_2g <- aov_car(formula = mean_c_mem ~ condition + Error(pNum/predictiveness), data = c_mem_test_2g)
+print(ANOVA_c_mem_test_2g)
+
+bay_ANOVA_c_mem_test_2g <- anovaBF(formula = mean_c_mem ~ condition + predictiveness + pNum,
+        data = data.frame(c_mem_test_2g),
+        whichRandom = "pNum")
+print(bay_ANOVA_c_mem_test_2g)
+bay_ANOVA_c_mem_test_2g_int <- bay_ANOVA_c_mem_test_2g[4]/bay_ANOVA_c_mem_test_2g[3]
+print(bay_ANOVA_c_mem_test_2g_int)
+```
+
+```{r, include = FALSE}
+# Pairwise comparisons between group levels
+#interaction analysis
+c_mem_test_2g_interaction <- emmeans(ANOVA_c_mem_test_2g, ~ predictiveness|condition)
+pairs(c_mem_test_2g_interaction, adjust = "bon")
+c_mem_test_2g_interaction2 <- emmeans(ANOVA_c_mem_test_2g, ~ condition|predictiveness)
+pairs(c_mem_test_2g_interaction2, adjust = "bon")
+```
+
+There were no significant differences in memory due to the Condition(`r apa(ANOVA_c_mem_test, effect = "condition")`, `r report_BF_and_error(bay_ANOVA_c_mem_test[1])`).However, the effect of Predictiveness and of the interaction was significant (Predictiveness: `r apa(ANOVA_c_mem_test, effect = "predictiveness")`, `r report_BF_and_error(bay_ANOVA_c_mem_test[2])`; Interaction: `r apa(ANOVA_c_mem_test, effect = "condition:predictiveness")`, `r report_BF_and_error(bay_ANOVA_c_mem_test_int[1])`) Bayesian evidence was anecdotal null for the Condition and anecdotal alternative the Predictiveness and the interaction. bonferroni corrected pairwise comparisons only found significant differences between the predictive and non-preditive cues on the certain condition (*t*(58) = 3.314, *p* = 0.002).
