@@ -74,558 +74,221 @@ test <- filter(test, !pNum %in% not_passed_pNum & !pNum %in% low_acc)
 
 N <- unique(stage1$pNum)
 ```
-```{r, include=FALSE}
+``` {r, include = FALSE}
 test <- test %>%
-  mutate (congruence = case_when(target == 1 & distractor == 2 ~ "C",
-                                 target == 2 & distractor == 1 ~ "C",
-                                 target == 5 & distractor == 6 ~ "C",
-                                 target == 6 & distractor == 5 ~ "C",
-                                 target == 1 & (distractor == 5 | distractor == 6) ~ "NCP",
-                                 target == 2 & (distractor == 5 | distractor == 6) ~ "NCP",
-                                 target == 5 & (distractor == 1 | distractor == 2) ~ "NCNP",
-                                 target == 6 & (distractor == 1 | distractor == 2) ~ "NCNP"))
+  mutate(trial_type = case_when((target == 1 & distractor == 2) | (target == 2 & distractor == 1) ~ "Pt vs Pf",
+                                (target == 5 & distractor == 6) | (target == 6 & distractor == 5) ~ "NPt vs NPf",
+                                (target == 1 & (distractor == 5 | distractor == 6)) | (target == 2 & (distractor == 5 | distractor == 6)) ~ "Pt vs NPf",
+                                (target == 5 & (distractor == 1 | distractor == 2)) | (target == 6 & (distractor == 1 | distractor == 2)) ~ "NPt vs Pf",
+                                (target == 3 & distractor == 4) | (target == 4 & distractor == 3) ~ "Pt vs Pf",
+                                (target == 7 & distractor == 8) | (target == 8 & distractor == 7) ~ "NPt vs NPf",
+                                (target == 3 & (distractor == 7 | distractor == 8)) | (target == 4 & (distractor == 7 | distractor == 8)) ~ "Pt vs NPf",
+                                (target == 7 & (distractor == 3 | distractor == 4)) | (target == 8 & (distractor == 3 | distractor == 4)) ~ "NPt vs Pf"),
+         predictiveness = case_when(trial_type == "Pt vs Pf" ~ "predictive",
+                                    trial_type == "NPt vs NPf"  ~ "non-predictive",
+                                    trial_type == "Pt vs NPf" ~ "predictive",
+                                    trial_type == "NPt vs Pf" ~ "non-predictive"),
+         congruence = case_when(trial_type == "Pt vs Pf" ~ "congruent",
+                                    trial_type == "NPt vs NPf"  ~ "congruent",
+                                    trial_type == "Pt vs NPf" ~ "incongruent",
+                                    trial_type == "NPt vs Pf" ~ "incongruent"))
 ```
 
-# Congruent trials
-```{r}
-test1 <- filter(test, congruence == "C")
-```
 
 ### Accuracy
 
 ```{r, include = FALSE}
-MA_test <- test1 %>%
-  group_by(cue_type, condition) %>%
+MA_test <- test %>%
+  group_by(trial_type, condition) %>%
   summarise(mean_acc = mean(acc, na.rm = TRUE),
             sd_acc = sd(acc, na.rm = TRUE)/sqrt(length(acc)))
 ```
 ```{r, echo = FALSE}
 ggplot(MA_test) +
-  geom_col(mapping = aes(x = cue_type, y = mean_acc, fill = condition)) +
-  geom_errorbar(aes(x= cue_type, y = mean_acc, ymin = mean_acc-sd_acc, ymax = mean_acc+sd_acc), color = "black", width=.1,position=position_dodge(0.05)) +
+  geom_col(mapping = aes(x = condition, y = mean_acc, fill = trial_type), position = position_dodge2()) +
+  geom_errorbar(aes(x= condition, y = mean_acc, ymin = mean_acc-sd_acc, ymax = mean_acc+sd_acc, group = trial_type), color = "black", width=.2,position=position_dodge(0.9)) +
   scale_x_discrete(name = "Type of cue") +
   scale_y_continuous(name="Accuracy") +
-  labs(title = "Mean accuracy in the test phase")
+  labs(title = "Mean accuracy in the test phase")+
+  scale_fill_brewer(palette = "PRGn")
 ```
 
 ```{r, include=FALSE}
 #ANOVA
-acc_test <- test1 %>%
-  group_by (pNum, condition, predictiveness) %>%
+acc_test <- test %>%
+  group_by (pNum, condition, predictiveness, congruence) %>%
   summarise(mean_acc = mean(acc, na.rm = TRUE))
 acc_test$pNum <- factor(acc_test$pNum)
 acc_test$condition <- factor(acc_test$condition)
 acc_test$predictiveness <- factor(acc_test$predictiveness)
-ANOVA_acc_test <- aov_car(formula = mean_acc ~ condition + Error(pNum/predictiveness), data = acc_test)
+acc_test$congruence <- factor(acc_test$congruence)
+ANOVA_acc_test <- aov_car(formula = mean_acc ~ condition + Error(pNum/predictiveness*congruence), data = acc_test)
 print(ANOVA_acc_test)
 
-bay_ANOVA_acc_test <- anovaBF(formula = mean_acc ~ condition + predictiveness + pNum,
+bay_ANOVA_acc_test <- anovaBF(formula = mean_acc ~ condition + predictiveness +congruence + pNum,
         data = data.frame(acc_test),
         whichRandom = "pNum")
 print(bay_ANOVA_acc_test)
-bay_ANOVA_acc_test_int <- bay_ANOVA_acc_test[4]/bay_ANOVA_acc_test[3]
-print(bay_ANOVA_acc_test_int)
+bay_ANOVA_acc_test_condxp <- bay_ANOVA_acc_test[4]/bay_ANOVA_acc_test[3]
+print(bay_ANOVA_acc_test_condxp)
+bay_ANOVA_acc_test_pxcong <- bay_ANOVA_acc_test[13]/bay_ANOVA_acc_test[7]
+print(bay_ANOVA_acc_test_pxcong)
+bay_ANOVA_acc_test_condxcong <- bay_ANOVA_acc_test[10]/bay_ANOVA_acc_test[6]
+print(bay_ANOVA_acc_test_condxcong)
+bay_ANOVA_acc_test_condxpxcong <- bay_ANOVA_acc_test[18]/bay_ANOVA_acc_test[17]
+print(bay_ANOVA_acc_test_condxpxcong)
 ```
 ```{r, include = FALSE}
 # Pairwise comparisons between group levels
 #condition analysis
-#acc_testdition <- emmeans(ANOVA_acc_test, ~ condition)
-#pairs(acc_test_condition, adjust = "bon")
+acc_test_pxcong_int <- emmeans(ANOVA_acc_test, ~ congruence|predictiveness)
+pairs(acc_test_pxcong_int, adjust = "bon")
 ```
-
-No significant effects were found (Condition: `r apa(ANOVA_acc_test, effect = "condition")`, `r report_BF_and_error(bay_ANOVA_acc_test[1])`; Predictiveness: `r apa(ANOVA_acc_test, effect = "predictiveness")`, `r report_BF_and_error(bay_ANOVA_acc_test[2])`; ConditionxPredictiveness: `r apa(ANOVA_acc_test, effect = "condition:predictiveness")`, `r report_BF_and_error(bay_ANOVA_acc_test_int[1])`). Bayesian evidence was anecdotal for the null hypothesis for the Condition and moderate null for the Predictiveness and the interaction. .
-
-### Memory score
-
-```{r, include = FALSE}
-MM_test <- test1 %>%
-  group_by(cue_type, condition) %>%
-  summarise(mean_mem = mean(mem_score, na.rm = TRUE),
-            sd_mem = sd(mem_score, na.rm = TRUE)/sqrt(length(mem_score)))
-```
-```{r, echo = FALSE}
-ggplot(MM_test) +
-  geom_col(mapping = aes(x = cue_type, y = mean_mem, fill = condition)) +
-  geom_errorbar(aes(x= cue_type, y = mean_mem, ymin = mean_mem-sd_mem, ymax = mean_mem+sd_mem), color = "black", width=.1,position=position_dodge(0.05)) +
-  scale_x_discrete(name = "Type of cue") +
-  scale_y_continuous(name="Memory score") +
-  labs(title = "Mean memory score in the test phase")
-```
-
-```{r, include=FALSE}
-#ANOVA
-mem_test <- test1 %>%
-  group_by (pNum, condition, predictiveness) %>%
-  summarise(mean_mem = mean(mem_score, na.rm = TRUE))
-mem_test$pNum <- factor(mem_test$pNum)
-mem_test$condition <- factor(mem_test$condition)
-mem_test$predictiveness <- factor(mem_test$predictiveness)
-ANOVA_mem_test <- aov_car(formula = mean_mem ~ condition + Error(pNum/predictiveness), data = mem_test)
-print(ANOVA_mem_test)
-
-bay_ANOVA_mem_test <- anovaBF(formula = mean_mem ~ condition + predictiveness + pNum,
-        data = data.frame(mem_test),
-        whichRandom = "pNum")
-print(bay_ANOVA_mem_test)
-bay_ANOVA_mem_test_int <- bay_ANOVA_mem_test[4]/bay_ANOVA_mem_test[3]
-print(bay_ANOVA_mem_test_int)
-```
-```{r, include = FALSE}
-# Pairwise comparisons between group levels
-#interaction analysis
-#mem_test_interaction <- emmeans(ANOVA_mem_test, ~ predictiveness|condition)
-#pairs(mem_test_interaction, adjust = "bon")
-#mem_test_interaction2 <- emmeans(ANOVA_mem_test, ~ condition|predictiveness)
-#pairs(mem_test_interaction2, adjust = "bon")
-#condition ananlysis
-mem_test_condition <- emmeans(ANOVA_mem_test, ~ condition)
-pairs(mem_test_condition, adjust = "bon")
-```
-
-Responding was higher in the uncertain group than in the certain groups. There were  significant differences in memory due to the Condition, with the bayesian anova indicating anecdotal evidence for the alternative hypothesis (`r apa(ANOVA_mem_test, effect = "condition")`, `r report_BF_and_error(bay_ANOVA_mem_test[1])`). There was non significant evidence of the effect of Predictiveness, showing moderate null bayesian evidence (`r apa(ANOVA_mem_test, effect = "predictiveness")`, `r report_BF_and_error(bay_ANOVA_mem_test[2])`), and of the interaction, showing also moderate null Bayesian evidence (`r apa(ANOVA_acc_test, effect = "condition:predictiveness")`, `r report_BF_and_error(bay_ANOVA_acc_test_int[1])`).
+A mixed methods ANOVA found a significant the main effect of the Condition (`r apa(ANOVA_acc_test, effect = "condition")`, `r report_BF_and_error(bay_ANOVA_acc_test[1])`), that showed moderate bayesian evidence for the alternative hypothesis, of the Predictiveness (`r apa(ANOVA_acc_test, effect = "predictiveness")`, `r report_BF_and_error(bay_ANOVA_acc_test[2])`), showing strong alternative evidence, and the effect of the PredictivenessxCongruence interaction (`r apa(ANOVA_acc_test, effect = "predictiveness:congruence")`, `r report_BF_and_error(bay_ANOVA_acc_test_pxcong[1])`), with very strong alternative evidence. Bonferroni corrected pairwise comparisons showed significant differences between the congruent and incongruent trials both when the targets were non-predictive (*T*(87) = 2.911, *p* = .005) and when they were predictive (*T*(87) = 2.492, *p* = .015). There rest of effects were not significant(Congruence: `r apa(ANOVA_acc_test, effect = "congruence")`, `r report_BF_and_error(bay_ANOVA_acc_test[5])`, ConditionxPredictiveness: `r apa(ANOVA_acc_test, effect = "condition:predictiveness")`, `r report_BF_and_error(bay_ANOVA_acc_test_condxp[1])`; ConditionxCongruence: `r apa(ANOVA_acc_test, effect = "condition:predictiveness:congruence")`, `r report_BF_and_error(bay_ANOVA_acc_test_condxpxcong[1])`; ConditionxPredictivenessxCongruence: `r apa(ANOVA_acc_test, effect = "predictiveness:congruence")`, `r report_BF_and_error(bay_ANOVA_acc_test_pxcong[1])`). All these effects showed moderate bayesian evidence for the null hypothesis, except for the ConditionxCongruence interaction, that showed strong null evidence.
 
 ### Corrected memory score (hits x1, errors x0)
 
 ```{r, include = FALSE}
-Mc_mem_test <- test1 %>%
-  group_by(cue_type, condition) %>%
+Mc_mem_test <- test %>%
+  group_by(trial_type, condition) %>%
   summarise(mean_c_mem = mean(c_mem_score, na.rm = TRUE),
             sd_c_mem = sd(c_mem_score, na.rm = TRUE)/sqrt(length(c_mem_score)))
 ```
 ```{r, echo = FALSE}
 ggplot(Mc_mem_test) +
-  geom_col(mapping = aes(x = cue_type, y = mean_c_mem, fill = condition)) +
-  geom_errorbar(aes(x= cue_type, y = mean_c_mem, ymin = mean_c_mem-sd_c_mem, ymax = mean_c_mem+sd_c_mem), color = "black", width=.1,position=position_dodge(0.05)) +
+  geom_col(mapping = aes(x = condition, y = mean_c_mem, fill = trial_type), position = position_dodge2()) +
+  geom_errorbar(aes(x= condition, y = mean_c_mem, ymin = mean_c_mem-sd_c_mem, ymax = mean_c_mem+sd_c_mem, group = trial_type), color = "black", width=.2,position=position_dodge(0.9)) +
   scale_x_discrete(name = "Type of cue") +
   scale_y_continuous(name="Corrected memory score") +
-  labs(title = "Mean corrected memory score in the test phase")
+  labs(title = "Mean corrected memory score in the test phase")+
+  scale_fill_brewer(palette = "PRGn")
 ```
-
 ```{r, include=FALSE}
 #ANOVA
-c_mem_test <- test1 %>%
-  group_by (pNum, condition, predictiveness) %>%
+c_mem_test <- test %>%
+  group_by (pNum, condition, predictiveness, congruence) %>%
   summarise(mean_c_mem = mean(c_mem_score, na.rm = TRUE))
 c_mem_test$pNum <- factor(c_mem_test$pNum)
 c_mem_test$condition <- factor(c_mem_test$condition)
 c_mem_test$predictiveness <- factor(c_mem_test$predictiveness)
-ANOVA_c_mem_test <- aov_car(formula = mean_c_mem ~ condition + Error(pNum/predictiveness), data = c_mem_test)
+c_mem_test$congruence <- factor(c_mem_test$congruence)
+ANOVA_c_mem_test <- aov_car(formula = mean_c_mem ~ condition + Error(pNum/predictiveness*congruence), data = c_mem_test)
 print(ANOVA_c_mem_test)
 
-bay_ANOVA_c_mem_test <- anovaBF(formula = mean_c_mem ~ condition + predictiveness + pNum,
+bay_ANOVA_c_mem_test <- anovaBF(formula = mean_c_mem ~ condition + predictiveness + congruence + pNum,
         data = data.frame(c_mem_test),
         whichRandom = "pNum")
 print(bay_ANOVA_c_mem_test)
-bay_ANOVA_c_mem_test_int <- bay_ANOVA_c_mem_test[4]/bay_ANOVA_c_mem_test[3]
-print(bay_ANOVA_c_mem_test_int)
+bay_ANOVA_c_mem_test_condxp <- bay_ANOVA_c_mem_test[4]/bay_ANOVA_c_mem_test[3]
+print(bay_ANOVA_c_mem_test_condxp)
+bay_ANOVA_c_mem_test_pxcong <- bay_ANOVA_c_mem_test[13]/bay_ANOVA_c_mem_test[7]
+print(bay_ANOVA_c_mem_test_pxcong)
+bay_ANOVA_c_mem_test_condxcong <- bay_ANOVA_c_mem_test[10]/bay_ANOVA_c_mem_test[6]
+print(bay_ANOVA_c_mem_test_condxcong)
+bay_ANOVA_c_mem_test_condxpxcong <- bay_ANOVA_c_mem_test[18]/bay_ANOVA_c_mem_test[17]
+print(bay_ANOVA_c_mem_test_condxpxcong)
 ```
 ```{r, include = FALSE}
 # Pairwise comparisons between group levels
-#interaction analysis
-#c_mem_test_interaction <- emmeans(ANOVA_c_mem_test, ~ predictiveness|condition)
-#pairs(c_mem_test_interaction, adjust = "bon")
-#c_mem_test_interaction2 <- emmeans(ANOVA_c_mem_test, ~ condition|predictiveness)
-#pairs(c_mem_test_interaction2, adjust = "bon")
-#condition analysis
-c_mem_test_condition<- emmeans(ANOVA_c_mem_test, ~ condition)
-pairs(c_mem_test_condition, adjust = "bon")
+c_mem_test_pxcong_int <- emmeans(ANOVA_c_mem_test, ~ congruence|predictiveness)
+pairs(c_mem_test_pxcong_int, adjust = "bon")
 ```
-
-There were no significant differences in memory due to the condition, with the bayesian analysis indicating anecdotal evidence for the alternative hypothesis (`r apa(ANOVA_c_mem_test, effect = "condition")`, `r report_BF_and_error(bay_ANOVA_c_mem_test[1])`; ), nor the  effect of Predictiveness, supported by moderate null bayesian evidence (`r apa(ANOVA_c_mem_test, effect = "predictiveness")`, `r report_BF_and_error(bay_ANOVA_c_mem_test[2])`), neither the effect of interaction, being the bayesian evidence moderate null (`r apa(ANOVA_c_mem_test, effect = "condition:predictiveness")`, `r report_BF_and_error(bay_ANOVA_c_mem_test_int[1])`).
-
-### Corrected memory score (hits x1, errors out)
-
-```{r, include = FALSE}
-Mc_mem_test <- filter(test1, acc == 1) %>%
-  group_by(cue_type, condition) %>%
-  summarise(mean_c_mem = mean(c_mem_score, na.rm = TRUE),
-            sd_c_mem = sd(c_mem_score, na.rm = TRUE)/sqrt(length(c_mem_score)))
-```
-```{r, echo = FALSE}
-ggplot(Mc_mem_test) +
-  geom_col(mapping = aes(x = cue_type, y = mean_c_mem, fill = condition)) +
-  geom_errorbar(aes(x= cue_type, y = mean_c_mem, ymin = mean_c_mem-sd_c_mem, ymax = mean_c_mem+sd_c_mem), color = "black", width=.1,position=position_dodge(0.05)) +
-  scale_x_discrete(name = "Type of cue") +
-  scale_y_continuous(name="Corrected memory score") +
-  labs(title = "Mean corrected memory score in the test phase")
-```
-
-```{r, include=FALSE}
-#ANOVA
-c_mem_test <- filter(test1, acc == 1) %>%
-  group_by (pNum, condition, predictiveness) %>%
-  summarise(mean_c_mem = mean(c_mem_score, na.rm = TRUE))
-c_mem_test$pNum <- factor(c_mem_test$pNum)
-c_mem_test$condition <- factor(c_mem_test$condition)
-c_mem_test$predictiveness <- factor(c_mem_test$predictiveness)
-ANOVA_c_mem_test <- aov_car(formula = mean_c_mem ~ condition + Error(pNum/predictiveness), data = c_mem_test)
-print(ANOVA_c_mem_test)
-
-bay_ANOVA_c_mem_test <- anovaBF(formula = mean_c_mem ~ condition + predictiveness + pNum,
-        data = data.frame(c_mem_test),
-        whichRandom = "pNum")
-print(bay_ANOVA_c_mem_test)
-bay_ANOVA_c_mem_test_int <- bay_ANOVA_c_mem_test[4]/bay_ANOVA_c_mem_test[3]
-print(bay_ANOVA_c_mem_test_int)
-```
-```{r, include = FALSE}
-# Pairwise comparisons between group levels
-#interaction analysis
-#c_mem_test_interaction <- emmeans(ANOVA_c_mem_test, ~ predictiveness|condition)
-#pairs(c_mem_test_interaction, adjust = "bon")
-#c_mem_test_interaction2 <- emmeans(ANOVA_c_mem_test, ~ condition|predictiveness)
-#pairs(c_mem_test_interaction2, adjust = "bon")
-```
-
-There were no significant differences in memory due to the Condition(`r apa(ANOVA_c_mem_test, effect = "condition")`, `r report_BF_and_error(bay_ANOVA_c_mem_test[1])`) nor the interaction (`r apa(ANOVA_c_mem_test, effect = "condition:predictiveness")`, `r report_BF_and_error(bay_ANOVA_c_mem_test_int[1])`). The effect of Predictiveness was significant(`r apa(ANOVA_c_mem_test, effect = "predictiveness")`, `r report_BF_and_error(bay_ANOVA_c_mem_test[2])`) Bayesian evidence was anecdotal null for the Condition, moderate null the interaction and moderate alternative for Predictiveness.
+A mixed methods ANOVA found a significant the main effect of the Condition (`r apa(ANOVA_c_mem_test, effect = "condition")`, `r report_BF_and_error(bay_ANOVA_c_mem_test[1])`), that showed anecdotal bayesian evidence for the alternative hypothesis, of the Predictiveness (`r apa(ANOVA_c_mem_test, effect = "predictiveness")`, `r report_BF_and_error(bay_ANOVA_c_mem_test[2])`), showing extreme alternative evidence, and the effect of the PredictivenessxCongruence interaction (`r apa(ANOVA_c_mem_test, effect = "predictiveness:congruence")`, `r report_BF_and_error(bay_ANOVA_c_mem_test_pxcong[1])`), with very strong alternative evidence. Bonferroni corrected pairwise comparisons showed significant differences between the congruent and incongruent trials both when the targets were non-predictive (*T*(87) = 2.966, *p* = .004) and when they were predictive (*T*(87) = 2.492, *p* = .013). There rest of effects were not significant (Congruence: `r apa(ANOVA_c_mem_test, effect = "congruence")`, `r report_BF_and_error(bay_ANOVA_c_mem_test[5])`; ConditionxPredictiveness: `r apa(ANOVA_c_mem_test, effect = "condition:predictiveness")`, `r report_BF_and_error(bay_ANOVA_c_mem_test_condxp[1])`; ConditionxCongruence: `r apa(ANOVA_c_mem_test, effect = "condition:predictiveness:congruence")`, `r report_BF_and_error(bay_ANOVA_c_mem_test_condxpxcong[1])`; ConditionxPredictivenessxCongruence: `r apa(ANOVA_c_mem_test, effect = "predictiveness:congruence")`, `r report_BF_and_error(bay_ANOVA_c_mem_test_pxcong[1])`). Bayesian evidence was moderate for the null hypothesis for the main effect of Congruence and the 3 way interaction, anecdotal evidence for the ConditionxPredictiveness and strong for the ConditionxCongruence interaction.
 
 ## Test without the certain_short condition
 
 ### Accuracy
 ```{r, include = FALSE}
-test_2g <- filter(test1, condition == "Certain" | condition == "Uncertain")
+test_2g <- filter(test, condition == "Certain" | condition == "Uncertain")
 ```
 ```{r, include = FALSE}
 MA_test_2g <- test_2g %>%
-  group_by(cue_type, condition) %>%
+  group_by(trial_type, condition) %>%
   summarise(mean_acc = mean(acc, na.rm = TRUE),
             sd_acc = sd(acc, na.rm = TRUE)/sqrt(length(acc)))
 ```
 ```{r, echo = FALSE}
 ggplot(MA_test_2g) +
-  geom_col(mapping = aes(x = cue_type, y = mean_acc, fill = condition)) +
-  geom_errorbar(aes(x= cue_type, y = mean_acc, ymin = mean_acc-sd_acc, ymax = mean_acc+sd_acc), color = "black", width=.1,position=position_dodge(0.05)) +
+  geom_col(mapping = aes(x = condition, y = mean_acc, fill = trial_type), position = position_dodge2()) +
+  geom_errorbar(aes(x= condition, y = mean_acc, ymin = mean_acc-sd_acc, ymax = mean_acc+sd_acc, group = trial_type), color = "black", width=.2,position=position_dodge(0.9)) +
   scale_x_discrete(name = "Type of cue") +
   scale_y_continuous(name="Accuracy") +
-  labs(title = "Mean accuracy in the test phase")
+  labs(title = "Mean accuracy in the test phase")+
+  scale_fill_brewer(palette = "PRGn")
 ```
-
 ```{r, include=FALSE}
 #ANOVA
 acc_test_2g <- test_2g %>%
-  group_by (pNum, condition, predictiveness) %>%
+  group_by (pNum, condition, predictiveness, congruence) %>%
   summarise(mean_acc = mean(acc, na.rm = TRUE))
 acc_test_2g$pNum <- factor(acc_test_2g$pNum)
 acc_test_2g$condition <- factor(acc_test_2g$condition)
 acc_test_2g$predictiveness <- factor(acc_test_2g$predictiveness)
-ANOVA_acc_test_2g <- aov_car(formula = mean_acc ~ condition + Error(pNum/predictiveness), data = acc_test_2g)
+acc_test_2g$congruence <- factor(acc_test_2g$congruence)
+ANOVA_acc_test_2g <- aov_car(formula = mean_acc ~ condition + Error(pNum/predictiveness*congruence), data = acc_test_2g)
 print(ANOVA_acc_test_2g)
 
-bay_ANOVA_acc_test_2g <- anovaBF(formula = mean_acc ~ condition + predictiveness + pNum,
+bay_ANOVA_acc_test_2g <- anovaBF(formula = mean_acc ~ condition + predictiveness + congruence + pNum,
         data = data.frame(acc_test_2g),
         whichRandom = "pNum")
 print(bay_ANOVA_acc_test_2g)
-bay_ANOVA_acc_test_2g_int <- bay_ANOVA_acc_test_2g[4]/bay_ANOVA_acc_test_2g[3]
-print(bay_ANOVA_acc_test_2g_int)
+bay_ANOVA_acc_test_2g_condxp <- bay_ANOVA_acc_test_2g[4]/bay_ANOVA_acc_test_2g[3]
+print(bay_ANOVA_acc_test_2g_condxp)
+bay_ANOVA_acc_test_2g_pxcong <- bay_ANOVA_acc_test_2g[13]/bay_ANOVA_acc_test_2g[7]
+print(bay_ANOVA_acc_test_2g_pxcong)
+bay_ANOVA_acc_test_2g_condxcong <- bay_ANOVA_acc_test_2g[10]/bay_ANOVA_acc_test_2g[6]
+print(bay_ANOVA_acc_test_2g_condxcong)
+bay_ANOVA_acc_test_2g_condxpxcong <- bay_ANOVA_acc_test_2g[18]/bay_ANOVA_acc_test_2g[17]
+print(bay_ANOVA_acc_test_2g_condxpxcong)
 ```
-```{r, include = FALSE}
-# Pairwise comparisons between group levels
-#condition analysis
-#acc_test_2g_condition <- emmeans(ANOVA_acc_test_2g, ~ condition)
-#pairs(acc_test_2g_condition, adjust = "bon")
-```
+A mixed methods ANOVA found a significant the main effect of the Condition (`r apa(ANOVA_acc_test_2g, effect = "condition")`, `r report_BF_and_error(bay_ANOVA_acc_test_2g[1])`), that showed moderate bayesian evidence for the alternative hypothesis, and of the Predictiveness (`r apa(ANOVA_acc_test_2g, effect = "predictiveness")`, `r report_BF_and_error(bay_ANOVA_acc_test_2g[2])`), showing anecdotal alternative evidence. It is worth noting that both the ConditionxPredictiveness and PredictivenessxCongruence interactions were marginally significant (ConditionxPredictiveness: `r apa(ANOVA_acc_test_2g, effect = "condition:predictiveness")`, `r report_BF_and_error(bay_ANOVA_acc_test_2g_condxp[1])`; PredictivenessxCongruence: `r apa(ANOVA_acc_test_2g, effect = "predictiveness:congruence")`, `r report_BF_and_error(bay_ANOVA_acc_test_2g_pxcong[1])`), the first showing anecdotal null bayesian evidence and the latter showing anecdotal alternative evidence. There rest of effects were not significant (Congruence: `r apa(ANOVA_acc_test_2g, effect = "congruence")`, `r report_BF_and_error(bay_ANOVA_acc_test_2g[5])`; ConditionxCongruence: `r apa(ANOVA_acc_test_2g, effect = "condition:predictiveness:congruence")`, `r report_BF_and_error(bay_ANOVA_acc_test_2g_condxpxcong[1])`; ConditionxPredictivenessxCongruence: `r apa(ANOVA_acc_test_2g, effect = "predictiveness:congruence")`, `r report_BF_and_error(bay_ANOVA_acc_test_2g_pxcong[1])`), all showing moderate null bayesian evidence. 
 
-Responding was higher in the uncertain group than in the certain group. A mixed model ANOVA found significant the effect of the Condition, but not of the Predictiveness and the interaction (Condition: `r apa(ANOVA_acc_test_2g, effect = "condition")`, `r report_BF_and_error(bay_ANOVA_acc_test_2g[1])`; Predictiveness: `r apa(ANOVA_acc_test_2g, effect = "predictiveness")`, `r report_BF_and_error(bay_ANOVA_acc_test_2g[2])`; ConditionxPredictiveness: `r apa(ANOVA_acc_test_2g, effect = "condition:predictiveness")`, `r report_BF_and_error(bay_ANOVA_acc_test_2g_int[1])`). Bayesian evidence was anecdotal for the alternative hypothesis for Condition, moderate null for the Predictiveness and anecdotal null for the interaction. 
-
-### Memory score
+### Corrected memory score (hits x1, errors x0)
 
 ```{r, include = FALSE}
-MM_test_2g <- test_2g %>%
-  group_by(cue_type, condition) %>%
-  summarise(mean_mem = mean(mem_score, na.rm = TRUE),
-            sd_mem = sd(mem_score, na.rm = TRUE)/sqrt(length(mem_score)))
+Mc_test_2g <- test_2g %>%
+  group_by(trial_type, condition) %>%
+  summarise(mean_mem = mean(c_mem_score, na.rm = TRUE),
+            sd_mem = sd(c_mem_score, na.rm = TRUE)/sqrt(length(c_mem_score)))
 ```
 ```{r, echo = FALSE}
-ggplot(MM_test_2g) +
-  geom_col(mapping = aes(x = cue_type, y = mean_mem, fill = condition)) +
-  geom_errorbar(aes(x= cue_type, y = mean_mem, ymin = mean_mem-sd_mem, ymax = mean_mem+sd_mem), color = "black", width=.1,position=position_dodge(0.05)) +
+ggplot(Mc_test_2g) +
+  geom_col(mapping = aes(x = condition, y = mean_mem, fill = trial_type), position = position_dodge2()) +
+  geom_errorbar(aes(x= condition, y = mean_mem, ymin = mean_mem-sd_mem, ymax = mean_mem+sd_mem, group = trial_type), color = "black", width=.2,position=position_dodge(0.9)) +
   scale_x_discrete(name = "Type of cue") +
   scale_y_continuous(name="Memory score") +
-  labs(title = "Mean memory score in the test phase")
+  labs(title = "Mean memory score in the test phase")+
+  scale_fill_brewer(palette = "PRGn")
 ```
-
 ```{r, include=FALSE}
 #ANOVA
 mem_test_2g <- test_2g %>%
-  group_by (pNum, condition, predictiveness) %>%
-  summarise(mean_mem = mean(mem_score, na.rm = TRUE))
+  group_by (pNum, condition, predictiveness, congruence) %>%
+  summarise(mean_mem = mean(c_mem_score, na.rm = TRUE))
 mem_test_2g$pNum <- factor(mem_test_2g$pNum)
 mem_test_2g$condition <- factor(mem_test_2g$condition)
 mem_test_2g$predictiveness <- factor(mem_test_2g$predictiveness)
-ANOVA_mem_test_2g <- aov_car(formula = mean_mem ~ condition + Error(pNum/predictiveness), data = mem_test_2g)
+mem_test_2g$congruence <- factor(mem_test_2g$congruence)
+ANOVA_mem_test_2g <- aov_car(formula = mean_mem ~ condition + Error(pNum/predictiveness*congruence), data = mem_test_2g)
 print(ANOVA_mem_test_2g)
 
-bay_ANOVA_mem_test_2g <- anovaBF(formula = mean_mem ~ condition + predictiveness + pNum,
+bay_ANOVA_mem_test_2g <- anovaBF(formula = mean_mem ~ condition + predictiveness + congruence + pNum,
         data = data.frame(mem_test_2g),
         whichRandom = "pNum")
 print(bay_ANOVA_mem_test_2g)
-bay_ANOVA_mem_test_2g_int <- bay_ANOVA_mem_test_2g[4]/bay_ANOVA_mem_test_2g[3]
-print(bay_ANOVA_mem_test_2g_int)
+bay_ANOVA_mem_test_2g_condxp <- bay_ANOVA_mem_test_2g[4]/bay_ANOVA_mem_test_2g[3]
+print(bay_ANOVA_mem_test_2g_condxp)
+bay_ANOVA_mem_test_2g_pxcong <- bay_ANOVA_mem_test_2g[13]/bay_ANOVA_mem_test_2g[7]
+print(bay_ANOVA_mem_test_2g_pxcong)
+bay_ANOVA_mem_test_2g_condxcong <- bay_ANOVA_mem_test_2g[10]/bay_ANOVA_mem_test_2g[6]
+print(bay_ANOVA_mem_test_2g_condxcong)
+bay_ANOVA_mem_test_2g_condxpxcong <- bay_ANOVA_mem_test_2g[18]/bay_ANOVA_mem_test_2g[17]
+print(bay_ANOVA_mem_test_2g_condxpxcong)
 ```
 ```{r, include = FALSE}
 # Pairwise comparisons between group levels
-#interaction analysis
-#mem_test_interaction <- emmeans(ANOVA_mem_test, ~ predictiveness|condition)
-#pairs(mem_test_interaction, adjust = "bon")
-#mem_test_interaction2 <- emmeans(ANOVA_mem_test, ~ condition|predictiveness)
-#pairs(mem_test_interaction2, adjust = "bon")
-#condition ananlysis
-#mem_test_condition <- emmeans(ANOVA_mem_test, ~ condition)
-#pairs(mem_test_condition, adjust = "bon")
-```
-
-Responding was higher in the uncertain group than in the certain group. There were significant differences in memory due to the Condition, with the bayesian anova indicating anecdotal evidence for the alternative hypothesis (`r apa(ANOVA_mem_test, effect = "condition")`, `r report_BF_and_error(bay_ANOVA_mem_test[1])`), but not due to Predictiveness, showing moderate null bayesian evidence (`r apa(ANOVA_mem_test, effect = "predictiveness")`, `r report_BF_and_error(bay_ANOVA_mem_test[2])`) nor the interaction, showing anecdotal null Bayesian evidence (`r apa(ANOVA_acc_test, effect = "condition:predictiveness")`, `r report_BF_and_error(bay_ANOVA_acc_test_int[1])`).
-
-### Corrected memory score (hits x1, errors x0)
-
-```{r, include = FALSE}
-Mc_mem_test_2g <- test_2g %>%
-  group_by(cue_type, condition) %>%
-  summarise(mean_c_mem = mean(c_mem_score, na.rm = TRUE),
-            sd_c_mem = sd(c_mem_score, na.rm = TRUE)/sqrt(length(c_mem_score)))
-```
-```{r, echo = FALSE}
-ggplot(Mc_mem_test_2g) +
-  geom_col(mapping = aes(x = cue_type, y = mean_c_mem, fill = condition)) +
-  geom_errorbar(aes(x= cue_type, y = mean_c_mem, ymin = mean_c_mem-sd_c_mem, ymax = mean_c_mem+sd_c_mem), color = "black", width=.1,position=position_dodge(0.05)) +
-  scale_x_discrete(name = "Type of cue") +
-  scale_y_continuous(name="Corrected memory score") +
-  labs(title = "Mean corrected memory score in the test phase")
-```
-
-```{r, include=FALSE}
-#ANOVA
-c_mem_test_2g <- test_2g %>%
-  group_by (pNum, condition, predictiveness) %>%
-  summarise(mean_c_mem = mean(c_mem_score, na.rm = TRUE))
-c_mem_test_2g$pNum <- factor(c_mem_test_2g$pNum)
-c_mem_test_2g$condition <- factor(c_mem_test_2g$condition)
-c_mem_test_2g$predictiveness <- factor(c_mem_test_2g$predictiveness)
-ANOVA_c_mem_test_2g <- aov_car(formula = mean_c_mem ~ condition + Error(pNum/predictiveness), data = c_mem_test_2g)
-print(ANOVA_c_mem_test_2g)
-
-bay_ANOVA_c_mem_test_2g <- anovaBF(formula = mean_c_mem ~ condition + predictiveness + pNum,
-        data = data.frame(c_mem_test_2g),
-        whichRandom = "pNum")
-print(bay_ANOVA_c_mem_test_2g)
-bay_ANOVA_c_mem_test_2g_int <- bay_ANOVA_c_mem_test_2g[4]/bay_ANOVA_c_mem_test_2g[3]
-print(bay_ANOVA_c_mem_test_2g_int)
-```
-```{r, include = FALSE}
-# Pairwise comparisons between group levels
-#interaction analysis
-#c_mem_test_2g_interaction <- emmeans(ANOVA_c_mem_test_2g, ~ predictiveness|condition)
-#pairs(c_mem_test_2g_interaction, adjust = "bon")
-#c_mem_test_2g_interaction2 <- emmeans(ANOVA_c_mem_test_2g, ~ condition|predictiveness)
-#pairs(c_mem_test_2g_interaction2, adjust = "bon")
 #condition analysis
-#c_mem_test_condition<- emmeans(ANOVA_c_mem_test, ~ condition)
-#pairs(c_mem_test_condition, adjust = "bon")
+#mem_test_2g_condition <- emmeans(ANOVA_mem_test_2g, ~ condition)
+#pairs(mem_test_2g_condition, adjust = "bon")
 ```
-
-There were no significant differences in memory (Condition: `r apa(ANOVA_c_mem_test, effect = "condition")`, `r report_BF_and_error(bay_ANOVA_c_mem_test[1])`; Predictiveness: `r apa(ANOVA_c_mem_test, effect = "predictiveness")`, `r report_BF_and_error(bay_ANOVA_c_mem_test[2])`; Interaction: `r apa(ANOVA_c_mem_test, effect = "condition:predictiveness")`, `r report_BF_and_error(bay_ANOVA_c_mem_test_int[1])`). bayesian evidence for all effects was anecdotal null.
-
-### Corrected memory score (hits x1, errors out)
-
-```{r, include = FALSE}
-Mc_mem_test_2g <- filter(test_2g, acc == 1) %>%
-  group_by(cue_type, condition) %>%
-  summarise(mean_c_mem = mean(c_mem_score, na.rm = TRUE),
-            sd_c_mem = sd(c_mem_score, na.rm = TRUE)/sqrt(length(c_mem_score)))
-```
-```{r, echo = FALSE}
-ggplot(Mc_mem_test_2g) +
-  geom_col(mapping = aes(x = cue_type, y = mean_c_mem, fill = condition)) +
-  geom_errorbar(aes(x= cue_type, y = mean_c_mem, ymin = mean_c_mem-sd_c_mem, ymax = mean_c_mem+sd_c_mem), color = "black", width=.1,position=position_dodge(0.05)) +
-  scale_x_discrete(name = "Type of cue") +
-  scale_y_continuous(name="Corrected memory score") +
-  labs(title = "Mean corrected memory score in the test phase")
-```
-
-```{r, include=FALSE}
-#ANOVA
-c_mem_test_2g <- filter(test_2g, acc == 1) %>%
-  group_by (pNum, condition, predictiveness) %>%
-  summarise(mean_c_mem = mean(c_mem_score, na.rm = TRUE))
-c_mem_test_2g$pNum <- factor(c_mem_test_2g$pNum)
-c_mem_test_2g$condition <- factor(c_mem_test_2g$condition)
-c_mem_test_2g$predictiveness <- factor(c_mem_test_2g$predictiveness)
-ANOVA_c_mem_test_2g <- aov_car(formula = mean_c_mem ~ condition + Error(pNum/predictiveness), data = c_mem_test_2g)
-print(ANOVA_c_mem_test_2g)
-
-bay_ANOVA_c_mem_test_2g <- anovaBF(formula = mean_c_mem ~ condition + predictiveness + pNum,
-        data = data.frame(c_mem_test_2g),
-        whichRandom = "pNum")
-print(bay_ANOVA_c_mem_test_2g)
-bay_ANOVA_c_mem_test_2g_int <- bay_ANOVA_c_mem_test_2g[4]/bay_ANOVA_c_mem_test_2g[3]
-print(bay_ANOVA_c_mem_test_2g_int)
-```
-```{r, include = FALSE}
-# Pairwise comparisons between group levels
-#interaction analysis
-#c_mem_test_2g_interaction <- emmeans(ANOVA_c_mem_test_2g, ~ predictiveness|condition)
-#pairs(c_mem_test_2g_interaction, adjust = "bon")
-#c_mem_test_2g_interaction2 <- emmeans(ANOVA_c_mem_test_2g, ~ condition|predictiveness)
-#pairs(c_mem_test_2g_interaction2, adjust = "bon")
-```
-
-There were no significant differences in memory (Condition: `r apa(ANOVA_c_mem_test, effect = "condition")`, `r report_BF_and_error(bay_ANOVA_c_mem_test[1])`;Predictiveness: `r apa(ANOVA_c_mem_test, effect = "predictiveness")`, `r report_BF_and_error(bay_ANOVA_c_mem_test[2])`; Interaction: `r apa(ANOVA_c_mem_test, effect = "condition:predictiveness")`, `r report_BF_and_error(bay_ANOVA_c_mem_test_int[1])`). Bayesian evidence was anecdotal null for all effects. 
-
-## Certain only trials
-### Accuracy
-```{r, include = FALSE}
-test_certain <- filter(test1, condition == "Certain")
-```
-```{r, include = FALSE}
-MA_test_certain <- test_certain %>%
-  group_by(cue_type, condition) %>%
-  summarise(mean_acc = mean(acc, na.rm = TRUE),
-            sd_acc = sd(acc, na.rm = TRUE)/sqrt(length(acc)))
-```
-```{r, echo = FALSE}
-ggplot(MA_test_certain) +
-  geom_col(mapping = aes(x = cue_type, y = mean_acc, fill = condition)) +
-  geom_errorbar(aes(x= cue_type, y = mean_acc, ymin = mean_acc-sd_acc, ymax = mean_acc+sd_acc), color = "black", width=.1,position=position_dodge(0.05)) +
-  scale_x_discrete(name = "Type of cue") +
-  scale_y_continuous(name="Accuracy") +
-  labs(title = "Mean accuracy in the test phase")
-```
-
-```{r, include=FALSE}
-#ANOVA
-acc_test_certain <- test_certain %>%
-  group_by (pNum, predictiveness) %>%
-  summarise(acc = mean(acc, na.rm = TRUE))
-# compute the difference
-d <- with(acc_test_certain, 
-        acc[predictiveness == "non-predictive"] - acc[predictiveness == "predictive"])
-# Shapiro-Wilk normality test for the differences
-shapiro.test(d)
-```
-```{r, include=FALSE}
-wilcox_acc_test_certain <- wilcox.test(acc ~ predictiveness, data = acc_test_certain, paired = TRUE)
-print(wilcox_acc_test_certain)
-
-pred_acc_test_certain <- subset(acc_test_certain,  predictiveness == "predictive", acc, drop = TRUE)
-nonpred_acc_test_certain <- subset(acc_test_certain,  predictiveness == "non-predictive", acc, drop = TRUE)
-bay_t.test_acc_test_certain <-  ttestBF(pred_acc_test_certain, nonpred_acc_test_certain, paired = TRUE)
-print(bay_t.test_acc_test_certain)
-```
-There are no differences in accuracy due to predictiveness, and the bayesian analysis indicates moderate evidence for the null hypothesis (*V* = `r  wilcox_acc_test_certain[["statistic"]]`, *p* = `r wilcox_acc_test_certain[["p.value"]]`, `r report_BF_and_error(bay_t.test_acc_test_certain[1])`).
-
-### Memory score
-
-```{r, include = FALSE}
-MM_test_certain <- test_certain %>%
-  group_by(cue_type, condition) %>%
-  summarise(mean_mem = mean(mem_score, na.rm = TRUE),
-            sd_mem = sd(mem_score, na.rm = TRUE)/sqrt(length(mem_score)))
-```
-```{r, echo = FALSE}
-ggplot(MM_test_certain) +
-  geom_col(mapping = aes(x = cue_type, y = mean_mem, fill = condition)) +
-  geom_errorbar(aes(x= cue_type, y = mean_mem, ymin = mean_mem-sd_mem, ymax = mean_mem+sd_mem), color = "black", width=.1,position=position_dodge(0.05)) +
-  scale_x_discrete(name = "Type of cue") +
-  scale_y_continuous(name="Memory score") +
-  labs(title = "Mean memory score in the test phase")
-```
-
-```{r, include=FALSE}
-mem_test_certain <- test_certain %>%
-  group_by (pNum, predictiveness) %>%
-  summarise(mem = mean(mem_score, na.rm = TRUE))
-# compute the difference
-d <- with(mem_test_certain, 
-        mem[predictiveness == "non-predictive"] - mem[predictiveness == "predictive"])
-# Shapiro-Wilk normality test for the differences
-shapiro.test(d)
-```
-```{r, include=FALSE}
-t.test_mem_test_certain <- t.test(mem ~ predictiveness, data = mem_test_certain, paired = TRUE)
-print(t.test_mem_test_certain)
-
-pred_mem_test_certain <- subset(mem_test_certain,  predictiveness == "predictive", mem, drop = TRUE)
-nonpred_mem_test_certain <- subset(mem_test_certain,  predictiveness == "non-predictive", mem, drop = TRUE)
-bay_t.test_mem_test_certain <-  ttestBF(pred_mem_test_certain, nonpred_mem_test_certain, paired = TRUE)
-print(bay_t.test_mem_test_certain)
-```
-
-There are no differences in memory due to predictiveness, and the bayesian analysis indicates anecdotal evidence for the null hypothesis (`r apa(t.test_mem_test_certain)`, `r report_BF_and_error(bay_t.test_mem_test_certain[1])`).
-
-### Corrected memory score (hits x1, errors x0)
-
-```{r, include = FALSE}
-Mc_mem_test_certain <- test_certain %>%
-  group_by(cue_type, condition) %>%
-  summarise(mean_c_mem = mean(c_mem_score, na.rm = TRUE),
-            sd_c_mem = sd(c_mem_score, na.rm = TRUE)/sqrt(length(c_mem_score)))
-```
-```{r, echo = FALSE}
-ggplot(Mc_mem_test_certain) +
-  geom_col(mapping = aes(x = cue_type, y = mean_c_mem, fill = condition)) +
-  geom_errorbar(aes(x= cue_type, y = mean_c_mem, ymin = mean_c_mem-sd_c_mem, ymax = mean_c_mem+sd_c_mem), color = "black", width=.1,position=position_dodge(0.05)) +
-  scale_x_discrete(name = "Type of cue") +
-  scale_y_continuous(name="Corrected memory score") +
-  labs(title = "Mean corrected memory score in the test phase")
-```
-
-```{r, include=FALSE}
-c_mem_test_certain <- test_certain %>%
-  group_by (pNum, predictiveness) %>%
-  summarise(c_mem = mean(c_mem_score, na.rm = TRUE))
-# compute the difference
-d <- with(c_mem_test_certain, 
-        c_mem[predictiveness == "non-predictive"] - c_mem[predictiveness == "predictive"])
-# Shapiro-Wilk normality test for the differences
-shapiro.test(d)
-```
-```{r, include=FALSE}
-t.test_c_mem_test_certain <- t.test(c_mem ~ predictiveness, data = c_mem_test_certain, paired = TRUE)
-print(t.test_c_mem_test_certain)
-
-pred_c_mem_test_certain <- subset(c_mem_test_certain,  predictiveness == "predictive", c_mem, drop = TRUE)
-nonpred_c_mem_test_certain <- subset(c_mem_test_certain,  predictiveness == "non-predictive", c_mem, drop = TRUE)
-bay_t.test_c_mem_test_certain <-  ttestBF(pred_c_mem_test_certain, nonpred_c_mem_test_certain, paired = TRUE)
-print(bay_t.test_c_mem_test_certain)
-```
-
-There are no differences in memory due to predictiveness, and the bayesian analysis indicates anecdotal evidence for the null hypothesis (`r apa(t.test_c_mem_test_certain)`, `r report_BF_and_error(bay_t.test_c_mem_test_certain[1])`).
-
-### Corrected memory score (hits x1, errors out)
-
-```{r, include = FALSE}
-Mc_mem_test_certain <- filter(test_certain, acc == 1) %>%
-  group_by(cue_type, condition) %>%
-  summarise(mean_c_mem = mean(c_mem_score, na.rm = TRUE),
-            sd_c_mem = sd(c_mem_score, na.rm = TRUE)/sqrt(length(c_mem_score)))
-```
-```{r, echo = FALSE}
-ggplot(Mc_mem_test_certain) +
-  geom_col(mapping = aes(x = cue_type, y = mean_c_mem, fill = condition)) +
-  geom_errorbar(aes(x= cue_type, y = mean_c_mem, ymin = mean_c_mem-sd_c_mem, ymax = mean_c_mem+sd_c_mem), color = "black", width=.1,position=position_dodge(0.05)) +
-  scale_x_discrete(name = "Type of cue") +
-  scale_y_continuous(name="Corrected memory score") +
-  labs(title = "Mean corrected memory score in the test phase")
-```
-
-```{r, include=FALSE}
-c_mem_test_certain <- filter(test_certain, acc == 1 & pNum != 37) %>%
-  group_by (pNum, predictiveness) %>%
-  summarise(c_mem = mean(c_mem_score, na.rm = TRUE))
-# compute the difference
-d <- with(c_mem_test_certain, 
-        c_mem[predictiveness == "non-predictive"] - c_mem[predictiveness == "predictive"])
-# Shapiro-Wilk normality test for the differences
-shapiro.test(d)
-```
-```{r, include=FALSE}
-wilcox_c_mem_test_certain <- wilcox.test(c_mem ~ predictiveness, data = c_mem_test_certain, paired = TRUE)
-print(wilcox_c_mem_test_certain)
-
-pred_c_mem_test_certain <- subset(c_mem_test_certain,  predictiveness == "predictive", c_mem, drop = TRUE)
-nonpred_c_mem_test_certain <- subset(c_mem_test_certain,  predictiveness == "non-predictive", c_mem, drop = TRUE)
-bay_t.test_c_mem_test_certain <-  ttestBF(pred_c_mem_test_certain, nonpred_c_mem_test_certain, paired = TRUE)
-print(bay_t.test_c_mem_test_certain)
-```
-
-There are no differences in memory due to predictiveness, and the bayesian analysis indicates anecdotal evidence for the null hypothesis (`r apa(t.test_c_mem_test_certain)`, `r report_BF_and_error(bay_t.test_c_mem_test_certain[1])`). 
+A mixed methods ANOVA found a significant the main effect of the Condition (`r apa(ANOVA_mem_test_2g, effect = "condition")`, `r report_BF_and_error(bay_ANOVA_mem_test_2g[1])`), that showed anecdotal bayesian evidence for the alternative hypothesis, of the Predictiveness (`r apa(ANOVA_mem_test_2g, effect = "predictiveness")`, `r report_BF_and_error(bay_ANOVA_mem_test_2g[2])`), showing very strong alternative evidence, and the ConditionxPredictiveness (`r apa(ANOVA_mem_test_2g, effect = "condition:predictiveness")`, `r report_BF_and_error(bay_ANOVA_mem_test_2g_condxp[1])`), also showing anecdotal evidence. It is worth noting that the PredictivenessxCongruence interaction was marginally significant (`r apa(ANOVA_mem_test_2g, effect = "predictiveness:congruence")`, `r report_BF_and_error(bay_ANOVA_mem_test_2g_pxcong[1])`), showing anecdotal alternative evidence. There rest of effects were not significant (Congruence: `r apa(ANOVA_mem_test_2g, effect = "congruence")`, `r report_BF_and_error(bay_ANOVA_mem_test_2g[5])`; ConditionxCongruence: `r apa(ANOVA_mem_test_2g, effect = "condition:predictiveness:congruence")`, `r report_BF_and_error(bay_ANOVA_mem_test_2g_condxpxcong[1])`; ConditionxPredictivenessxCongruence: `r apa(ANOVA_mem_test_2g, effect = "predictiveness:congruence")`, `r report_BF_and_error(bay_ANOVA_mem_test_2g_pxcong[1])`), all showing moderate null bayesian evidence. 
