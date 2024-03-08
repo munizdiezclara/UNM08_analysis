@@ -10,6 +10,7 @@ library(afex)
 library(BayesFactor)
 library(apa)
 library(emmeans)
+library("writexl")
 load("UNM08_proc_data.RData")
 # function to force scientific formatting of numbers (used for large BFs)
 changeSciNot <- function(n) {
@@ -189,8 +190,6 @@ print(bay_ANOVA_c_mem_test_condxpxcong)
 ```
 ```{r, include = FALSE}
 # Pairwise comparisons between group levels
-c_mem_test_cond <- emmeans(ANOVA_c_mem_test, ~ condition)
-pairs(c_mem_test_cond, adjust = "bon")
 c_mem_test_pxcong_int <- emmeans(ANOVA_c_mem_test, ~ congruence|predictiveness)
 pairs(c_mem_test_pxcong_int, adjust = "bon")
 ```
