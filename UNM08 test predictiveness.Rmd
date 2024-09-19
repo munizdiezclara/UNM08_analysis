@@ -49,15 +49,15 @@ report_BF_and_error <- function(BF_in, sci_not = TRUE, hyp = "alt"){
 ```{r, include=FALSE}
 #Create probable response variable, as we are using the uncertain condition
 stage1 <- stage1 %>%
-  mutate(prob_response = case_when((cue1 == 1 | cue1 == 3) & cue_o_mouse.clicked_name == "o1_image" ~ 1,
-                                   (cue1 == 1 | cue1 == 3) & cue_o_mouse.clicked_name == "o2_image" ~ 0, 
-                                   (cue1 == 2 | cue1 == 4) & cue_o_mouse.clicked_name == "o1_image" ~ 0,
-                                   (cue1 == 2 | cue1 == 4) & cue_o_mouse.clicked_name == "o2_image" ~ 1))
+  mutate(prob_response = case_when((cue1 == 1 | cue1 == 3) & response == "o1_image" ~ 1,
+                                   (cue1 == 1 | cue1 == 3) & response == "o2_image" ~ 0, 
+                                   (cue1 == 2 | cue1 == 4) & response == "o1_image" ~ 0,
+                                   (cue1 == 2 | cue1 == 4) & response == "o2_image" ~ 1))
 stage2 <- stage2 %>%
-  mutate(prob_response = case_when((cue1 == 1 | cue1 == 3) & cue_o_mouse.clicked_name == "o1_image" ~ 1,
-                                   (cue1 == 1 | cue1 == 3) & cue_o_mouse.clicked_name == "o2_image" ~ 0, 
-                                   (cue1 == 2 | cue1 == 4) & cue_o_mouse.clicked_name == "o1_image" ~ 0,
-                                   (cue1 == 2 | cue1 == 4) & cue_o_mouse.clicked_name == "o2_image" ~ 1))
+  mutate(prob_response = case_when((cue1 == 1 | cue1 == 3) & response == "o1_image" ~ 1,
+                                   (cue1 == 1 | cue1 == 3) & response == "o2_image" ~ 0, 
+                                   (cue1 == 2 | cue1 == 4) & response == "o1_image" ~ 0,
+                                   (cue1 == 2 | cue1 == 4) & response == "o2_image" ~ 1))
 #some exclusion criteria
 block6 <- filter(stage1, block == 6) %>%
   group_by(pNum, condition) %>%
@@ -200,7 +200,7 @@ A mixed methods ANOVA found a significant the main effect of the Condition (`r a
 
 ### Accuracy
 ```{r, include = FALSE}
-test_2g <- filter(test, condition == "Certain" | condition == "Uncertain")
+test_2g <- filter(test, condition == "Certain Long" | condition == "Uncertain")
 ```
 ```{r, include = FALSE}
 MA_test_2g <- test_2g %>%

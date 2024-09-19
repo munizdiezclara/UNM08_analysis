@@ -11,6 +11,7 @@ library(afex)
 library(BayesFactor)
 library(apa)
 library(emmeans)
+library(rstatix)
 library("writexl")
 load("C:/Users/munizdie/OneDrive - Lancaster University/Experiments/Recognition Memory/UNM08/UNM08_analysis/UNM08_proc_data.RData")
 # function to force scientific formatting of numbers (used for large BFs)
@@ -109,15 +110,15 @@ In this experiment, the differences in recognition memory of predictive and non-
 ```{r, include=FALSE}
 #Create probable response variable, as we are using the uncertain condition
 stage1 <- stage1 %>%
-  mutate(prob_response = case_when((cue1 == 1 | cue1 == 3) & cue_o_mouse.clicked_name == "o1_image" ~ 1,
-                                   (cue1 == 1 | cue1 == 3) & cue_o_mouse.clicked_name == "o2_image" ~ 0, 
-                                   (cue1 == 2 | cue1 == 4) & cue_o_mouse.clicked_name == "o1_image" ~ 0,
-                                   (cue1 == 2 | cue1 == 4) & cue_o_mouse.clicked_name == "o2_image" ~ 1))
+  mutate(prob_response = case_when((cue1 == 1 | cue1 == 3) & response == "o1_image" ~ 1,
+                                   (cue1 == 1 | cue1 == 3) & response == "o2_image" ~ 0, 
+                                   (cue1 == 2 | cue1 == 4) & response == "o1_image" ~ 0,
+                                   (cue1 == 2 | cue1 == 4) & response == "o2_image" ~ 1))
 stage2 <- stage2 %>%
-  mutate(prob_response = case_when((cue1 == 1 | cue1 == 3) & cue_o_mouse.clicked_name == "o1_image" ~ 1,
-                                   (cue1 == 1 | cue1 == 3) & cue_o_mouse.clicked_name == "o2_image" ~ 0, 
-                                   (cue1 == 2 | cue1 == 4) & cue_o_mouse.clicked_name == "o1_image" ~ 0,
-                                   (cue1 == 2 | cue1 == 4) & cue_o_mouse.clicked_name == "o2_image" ~ 1))
+  mutate(prob_response = case_when((cue1 == 1 | cue1 == 3) & response == "o1_image" ~ 1,
+                                   (cue1 == 1 | cue1 == 3) & response == "o2_image" ~ 0, 
+                                   (cue1 == 2 | cue1 == 4) & response == "o1_image" ~ 0,
+                                   (cue1 == 2 | cue1 == 4) & response == "o2_image" ~ 1))
 #some exclusion criteria
 block6 <- filter(stage1, block == 6) %>%
   group_by(pNum, condition) %>%
@@ -125,6 +126,7 @@ block6 <- filter(stage1, block == 6) %>%
 
 low_acc <- filter(block6, mean_response < 0.6) 
 low_acc <- low_acc$pNum
+not_passed_pNum <- not_passed_pNum$pNum
 
 stage1 <- filter(stage1, !pNum %in% not_passed_pNum & !pNum %in% low_acc)
 stage2 <- filter(stage2, !pNum %in% not_passed_pNum & !pNum %in% low_acc)
@@ -174,7 +176,7 @@ ggplot(MA_training) +
 
 ```{r, include = FALSE}
 #some t test to check that responding is significantly higher than chance
-mean_stage1_certain <- filter(stage1, condition == "Certain") %>%
+mean_stage1_certain <- filter(stage1, condition == "Certain Long") %>%
   group_by(pNum) %>%
    summarise(mean_response = mean(prob_response, na.rm = TRUE))
 t_mean_certain_stage1 <- t.test(mean_stage1_certain, mu = .5, alternative = "greater") 
@@ -196,7 +198,7 @@ print(bay_t_mean_uncertain_stage1)
 
 ```{r, include = FALSE}
 #some t test to check that responding is significantly higher than chance
-mean_stage1_cs <- filter(stage1, condition == "Certain_short") %>%
+mean_stage1_cs <- filter(stage1, condition == "Certain Short") %>%
   group_by(pNum) %>%
    summarise(mean_response = mean(prob_response, na.rm = TRUE))
 t_mean_cs_stage1 <- t.test(mean_stage1_cs, mu = .5, alternative = "greater") 
@@ -232,7 +234,7 @@ In stage 1, all groups showed a similar increase in accuracy as blocks progresse
 
 ```{r, include = FALSE}
 #some t test to check that responding is significantly higher than chance
-mean_stage2_certain <- filter(stage2, condition == "Certain") %>%
+mean_stage2_certain <- filter(stage2, condition == "Certain Long") %>%
   group_by(pNum) %>%
    summarise(mean_response = mean(prob_response, na.rm = TRUE))
 t_mean_certain_stage2 <- t.test(mean_stage2_certain, mu = .5, alternative = "greater") 
@@ -278,7 +280,7 @@ In stage 2, both groups showed stable accuracy on the 4 blocks, but the uncertai
 ### All training phase
 ```{r, include=FALSE}
 #ANOVA
-stage1_full <- filter(filter(stage1, condition == 'Certain' | condition == 'Uncertain'))
+stage1_full <- filter(filter(stage1, condition == 'Certain Long' | condition == 'Uncertain'))
 training <- rbind(stage1_full, stage2)
 ```
 
@@ -472,6 +474,23 @@ c_mem_test_condition<- emmeans(ANOVA_c_mem_test, ~ condition)
 pairs(c_mem_test_condition, adjust = "bon")
 ```
 
+```{r, include = FALSE}
+# Simple main effects analysis
+predictiveness.effect <- c_mem_test %>%
+  group_by(predictiveness) %>%
+  anova_test(dv = mean_c_mem, wid = pNum, between = condition)%>%
+  get_anova_table() %>%
+  adjust_pvalue(method = "bonferroni")
+print(predictiveness.effect)
+```
+```{r, include = FALSE}
+# Simple main effects analysis
+pwc <- c_mem_test %>%
+  group_by(predictiveness) %>%
+  pairwise_t_test(mean_c_mem ~ condition, p.adjust.method = "bonferroni")
+pwc
+```
+
 There were significant differences in memory due to the condition, with the bayesian analysis indicating moderate evidence for the alternative hypothesis (`r apa(ANOVA_c_mem_test, effect = "condition")`, `r report_BF_and_error(bay_ANOVA_c_mem_test[1])`; ). There was also a significant effect of Predictiveness, supported by extreme bayesian evidence (`r apa(ANOVA_c_mem_test, effect = "predictiveness")`, `r report_BF_and_error(bay_ANOVA_c_mem_test[2])`). However, the effect of interaction was found non-significant, being the bayesian evidence anecdotal null (`r apa(ANOVA_c_mem_test, effect = "condition:predictiveness")`, `r report_BF_and_error(bay_ANOVA_c_mem_test_int[1])`).  Bonferroni corrected pairwise comparisons showed that there were significant differences between the certain short and uncertain groups (*t*(87) = 2.748, *p* = 0.022).
 
 ### Corrected memory score (hits x1, errors out)
@@ -526,7 +545,7 @@ There were no significant differences in memory due to the Condition(`r apa(ANOV
 
 ### Accuracy
 ```{r, include = FALSE}
-test_2g <- filter(test, condition == "Certain" | condition == "Uncertain")
+test_2g <- filter(test, condition == "Certain Long" | condition == "Uncertain")
 ```
 
 ```{r, include = FALSE}
